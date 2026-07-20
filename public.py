@@ -94,11 +94,16 @@ def get_target_allocation(name):
 
 
 def parse_portfolio(portfolio):
-    return (
-        sum(i.value for i in portfolio.equity), 
-        [i for i in portfolio.equity if i.type == 'CASH'][0],
-        portfolio.positions
-        )
+    value = sum(i.value for i in portfolio.equity)
+    cash = [i for i in portfolio.equity if i.type == 'CASH']
+    if len(cash) == 1:
+        cash = cash[0].value
+    elif len(cash) == 0:
+        cash = Decimal('0.00')
+    else:
+        raise Exception("Received more than one cash position. Aborting")
+    positions = portfolio.positions
+    return value, cash, positions
 
 
 def print_account_info(portfolio, name):
@@ -130,18 +135,20 @@ def print_account_info(portfolio, name):
     print_row(["Total stock", "", total_val, total_pct, 
             abs_delta, total_cb, total_change_b])
     print_divider()
-    print_row(["Cash", "", cash.value, cash.percentage_of_portfolio, 
-        cash.percentage_of_portfolio, 0.0, 0.0])
+    cash_percent = (cash/value*100).quantize(Decimal("0.01"), 
+        rounding = decimal.ROUND_HALF_EVEN)
+    print_row(["Cash", "", cash, cash_percent, 
+        cash_percent, 0.0, 0.0])
     print_divider()
-    total_val += cash.value
-    total_pct += cash.percentage_of_portfolio
-    abs_delta += abs(cash.percentage_of_portfolio)
+    total_val += cash
+    total_pct += cash_percent
+    abs_delta += abs(cash_percent)
     print_row(["Total", "", total_val, total_pct, 
             abs_delta, total_cb, total_change_b])
     print_divider()
 
     # suggest rebalance
-    cash_reb = cash.value > Decimal('20.0')
+    cash_reb = cash > Decimal('20.0')
     abs_delts_reb = abs_delta > len(allocations) * Decimal('0.15')
     if abs_delts_reb or cash_reb:
         print("Suggested to rebalance this portfolio. Causes:")
@@ -289,7 +296,7 @@ class Rebalancer:
         allocations = get_target_allocation(self.name)
         value, cash, positions = parse_portfolio(self.portfolio)
 
-        self.cash_value = cash.value
+        self.cash_value = cash
         self.sell = []
         self.buy = []
 
@@ -440,7 +447,7 @@ class Rebalancer:
                 yield symbol, amount, OrderSide.BUY
                 # Note, there are corner cases were cash would be left uninvested, but less
                 # than 1$. Good enough
-        self.place_orders(buy_orders(chk, cash_value.value), chk)
+        self.place_orders(buy_orders(chk, cash_value), chk)
 
         # Wait for order completion
         orders_failed = self.wait_orders(chk)
