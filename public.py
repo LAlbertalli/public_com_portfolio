@@ -461,6 +461,7 @@ class Rebalancer:
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Help me monitor my portfolio on Public.com and keep it balanced',
+        formatter_class = argparse.RawTextHelpFormatter
         )
     parser.add_argument("action", choices=['show', 'rebalance', 'recover'], 
         default = 'show', 
