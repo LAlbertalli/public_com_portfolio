@@ -330,7 +330,7 @@ class Rebalancer:
         total_new = Decimal('0.0')
         total_pct = Decimal('0.0')
         choose_table_format(FORMAT_REBALANCE)
-        print_header(name)
+        print_header(self.name)
         shown_symbols = []
         for r in portfolio_allocation_analysis(positions, allocations):
             "Name","Symbol","Value","Buy Sell","Amount","New Balance","New %"
