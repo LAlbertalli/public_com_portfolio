@@ -77,3 +77,6 @@ The project is not ready to contribute yet. But if you really really really want
 
 **Important:** I chose not to use AI on this project. Please respect this choice! Any PR that smells like AI slop will be refused.
 
+# TODO
+- Error handling when calling the public.com API is nonexistent. For reading (`show`), this is not a big concern. For writing, the checkpoint capabilities help a lot, but better recovery would help. The general approach: if the error is not recoverable because of API calling logic, don't intercept it. Let it fail! If the error is recoverable (e.g., temporarily unavailable, error 404 due to race conditions), then an error recovery should be attempted.
+- The gain/loss calculation in show is pretty crude and doesn't reflect the impact of rebalancing. I should probably build better functionality in the future, especially something to calculate better performance metrics.
