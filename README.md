@@ -36,30 +36,40 @@ cp config.py.tpl config.py
 Proceed to configure the accounts you have and their allocations. The template has comments to help. 
 Better instructions soon.
 
-## Use it
-**--- ! Warning ---**
+## 4. Use it
+**--- ! Caution ! ---**
 
-**This is still a Work in Progress. In detail, the read part works. The write part is still in progress.**
-
-**--- End Warning ---**
+I do not guarantee this works as intended. There can be bugs, so use caution
 
 To use it, just call `python3 public.py`
+
+It offers two main functionalities:
+- The first one, `show`, is a quick summary of your current portfolio and how it has deviated from the target allocation.
+- The second one, `rebalance`, calculates what ETF to buy and sell to rebalance your portfolio.
+
+The rebalance function can write to public and execute the changes it calculates. Use the `-r` flag to 
+actually do the rebalance. It has a pretty robust checkpointing functionality to recover in case of bugs on my side or 
+on public.com side causes issues. You can use the `recover` functionality to recover from any issues. This should work most of the time. **Before any run, the tool checks for incomplete rebalances. If you are stuck in a situation where it cannot recover, fix the issue manually on public.com and then remove the `.checkpoint.json` file.**
 
 `-h` will print the command help.
 
 ```
-usage: public.py [-h] [--run] [--account ACCOUNT] [{show,rebalance}]
+usage: public.py [-h] [-r] [-a ACCOUNT] [{show,rebalance,recover}]
 
 Help me monitor my portfolio on Public.com and keep it balanced
 
 positional arguments:
-  {show,rebalance}   Action to be execute: - show: Show the current portfolio - rebalance: Rebalance the portfolio. Notice, without
-                     --run, it will only simulate the rebalance
+  {show,rebalance,recover}
+                        Action to execute:
+                            - show: Show the current portfolio
+                            - rebalance: Rebalance the portfolio. Notice, without --run, it will only simulate the rebalance
+                            - recover: It recovers a previously failed rebalance. Note: it will ignore any other flags
 
 options:
-  -h, --help         show this help message and exit
-  --run              For rebalance, actually use the public apis to run the planned actions
-  --account ACCOUNT  Limit to the specified account
+  -h, --help            show this help message and exit
+  -r, --run             For rebalance, actually use the public apis to run the planned actions
+  -a, --account ACCOUNT
+                        Limit to the specified account
 ```
 
 # Contribute
