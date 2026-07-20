@@ -156,7 +156,7 @@ def print_account_info(portfolio, name):
             print("- Portfolio is out of balance of %.2f%%. Max is %.2f%%"%(
                 abs_delta, len(allocations) * Decimal('0.15')))
         if cash_reb:
-            print("- Portfolio has excessive cash balance %.2f$. Max is 20$"%(cash.value))
+            print("- Portfolio has excessive cash balance %.2f$. Max is 20$"%(cash))
 
 
 class CheckPointer:
