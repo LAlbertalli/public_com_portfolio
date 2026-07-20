@@ -455,17 +455,19 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Help me monitor my portfolio on Public.com and keep it balanced',
         )
-    parser.add_argument("action", choices=['show', 'rebalance'], 
+    parser.add_argument("action", choices=['show', 'rebalance', 'recover'], 
         default = 'show', 
         help = "Action to be execute:\n\
     - show: Show the current portfolio\n\
     - rebalance: Rebalance the portfolio. Notice, without --run,\
- it will only simulate the rebalance",
+ it will only simulate the rebalance\n\
+    - recover: It recovers a previously failed rebalance. \
+Note: it will ignore any other flags",
         nargs = '?')
-    parser.add_argument("--run", action = 'store_true',
+    parser.add_argument("-r", "--run", action = 'store_true',
         help = "For rebalance, actually use the public apis to run the planned actions")
 
-    parser.add_argument('--account', 
+    parser.add_argument("-a", '--account', 
         help = "Limit to the specified account")
 
     return parser.parse_args()
@@ -486,6 +488,9 @@ def rebalance(client, account, run):
             if ok and run is True:
                 rebalancer.execute_operations()
 
+def recover(client, checkpoints):
+    r = Rebalancer(client, checkpoints.account, CHECK_ACCOUNTS[checkpoints.account])
+    r.execute_operations(checkpoints = checkpoints)
 
 def validate_allocations(allocations):
     error = False
@@ -512,8 +517,8 @@ def main():
     args = parse_args()
 
     chk = CheckPointer.try_load()
-    if chk:
-        print("There is a pending rebalancing transaction. Aborting")
+    if chk and args.action != "recover":
+        print("There is a pending rebalancing transaction. Run with action 'recover' to continue")
         return
     
     try:
@@ -534,6 +539,8 @@ def main():
         show(client, args.account)
     elif args.action == "rebalance":
         rebalance(client, args.account, args.run)
+    elif args.action == "recover":
+        recover(client, chk)
 
 if __name__ == "__main__":
     main()
