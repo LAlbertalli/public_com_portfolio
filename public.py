@@ -465,7 +465,7 @@ def parse_args():
         )
     parser.add_argument("action", choices=['show', 'rebalance', 'recover'], 
         default = 'show', 
-        help = "Action to be execute:\n\
+        help = "Action to execute:\n\
     - show: Show the current portfolio\n\
     - rebalance: Rebalance the portfolio. Notice, without --run,\
  it will only simulate the rebalance\n\
