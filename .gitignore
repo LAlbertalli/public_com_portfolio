@@ -5,3 +5,4 @@ __pycache__
 # project special files
 config.py
 .publicdotcom_key
+.checkpoint.json

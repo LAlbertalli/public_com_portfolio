@@ -1,8 +1,11 @@
-import argparse, decimal
+import argparse, decimal, json, os, uuid
 
-from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig
+from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig,\
+    PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
+    OrderExpirationRequest, TimeInForce, OrderStatus
 from config import ALLOCATIONS, CHECK_ACCOUNTS
 from decimal import Decimal
+from time import sleep
 
 
 FORMAT_SHOW = [
@@ -149,58 +152,304 @@ def print_account_info(portfolio, name):
             print("- Portfolio has excessive cash balance %.2f$. Max is 20$"%(cash.value))
 
 
-def calculate_rebalance(portfolio, name):
-    allocations = get_target_allocation(name)
-    value, cash, positions = parse_portfolio(portfolio)
-    cash_value = cash.value
-    sell = []
-    buy = []
-    for r in portfolio_allocation_analysis(positions, allocations):
-        name, symbol,current_value, percentage, alloc, cost_basis, change_from_basis = r
-        delta = alloc - percentage
-        if delta < Decimal(-0.05): # Don't sell if difference is less than 0.05%
-            sell_amt = current_value/percentage*delta
-            sell_amt = sell_amt.quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
-            sell += [(symbol, sell_amt)]
-            cash_value += -sell_amt
-        if delta > Decimal('0.0'): # Always buy everything underindexed
-            buy += [(symbol, delta)]
-    if len(buy) == 0:
-        print("Error, found no underindexed fund to buy")
-        return None, None
-    total_delta = sum(delta for _, delta in buy)
-    buy = [(symbol, (delta/total_delta*cash_value).quantize(
-        Decimal('0.01'), rounding =decimal.ROUND_HALF_EVEN)) for symbol, delta in buy]
-    ops = dict(sell+buy)
+class CheckPointer:
+    filename = ".checkpoint.json"
+    def __init__(self, sell, buy, cash_value, account, orders = None):
+        self.status = {
+            "account": account,
+            "sell": [(s, str(a)) for s,a in sell],
+            "buy": [(s, str(a)) for s,a in buy],
+            "orders": orders or [],
+            "cash_value": str(cash_value)
+        }
+        self._write()
 
-    # Print
-    total_cval = Decimal('0.0')
-    total_ops = Decimal('0.0')
-    total_new = Decimal('0.0')
-    total_pct = Decimal('0.0')
-    choose_table_format(FORMAT_REBALANCE)
-    print_header(name)
-    shown_symbols = []
-    for r in portfolio_allocation_analysis(positions, allocations):
-        "Name","Symbol","Value","Buy Sell","Amount","New Balance","New %"
-        name, symbol,current_value, percentage, alloc, cost_basis, change_from_basis = r
-        op = ops.get(symbol, Decimal('0.0'))
-        buy_sell = "Buy" if op > Decimal('0.0') else "Sell" if op < Decimal('0.0') else "Nothing"
-        new_v = current_value+op
-        new_pct = (new_v/value*100).quantize(Decimal('0.01'), rounding =decimal.ROUND_HALF_EVEN)
-        print_row([name, symbol,current_value, buy_sell, op, new_v, new_pct])
-        total_cval += current_value
-        total_ops += op
-        total_new += new_v
-        total_pct += new_pct
+    @classmethod
+    def try_load(cls):
+        try:
+            with open(cls.filename) as f:
+                status = json.load(f)
+                r = cls(status["sell"],
+                    status["buy"],
+                    status["cash_value"],
+                    status["account"],
+                    orders = status["orders"]
+                    )
+                return r
+        except FileNotFoundError:
+            return None
 
-    print_divider()
-    print_row(["Total", "", total_cval, "", 
-            total_ops, total_new, total_pct])
-    print_divider()
-    return sell, buy
+    def _write(self):
+        with open(self.filename, "w") as f:
+            json.dump(self.status, f)
+
+    def new_order(self, order_id, symbol):
+        self.status["orders"] += [{
+            "order_id": order_id,
+            "symbol": symbol,
+            "done": False,
+            "amount": "0.0",
+            "cancelled": False,
+        }]
+        self._write()
+
+    def order_done(self, order_id, amount):
+        try:
+            i = [i for i in self.status["orders"] if i["order_id"] == order_id][0]
+        except IndexError:
+            return
+        i["amount"] = str(amount)
+        i["done"] = True
+        self._write()
+
+    def order_cancelled(self, order_id):
+        try:
+            i = [i for i in self.status["orders"] if i["order_id"] == order_id][0]
+        except IndexError:
+            return
+        i["cancelled"] = True
+        i["done"] = True
+        self._write()
+
+    def done(self):
+        if not self.all_done:
+            raise Exception("done() called but not all transaction are completed")
+        os.remove(self.filename)
+
+    @property
+    def account(self):
+        return self.status["account"]
+
+    @property
+    def order_ids(self):
+        return dict(
+            (i["symbol"], i["order_id"]) for i in self.status["orders"]
+            if not i["cancelled"])
+
+    @property
+    def running_amount(self):
+        return sum(Decimal(i["amount"]) for i in self.status["orders"]
+            if i["done"] and not i["cancelled"])
+
+    @property
+    def all_done(self):
+        return all(i["done"] for i in self.status["orders"])
+
+    @property
+    def cash_value(self):
+        return Decimal(self.status["cash_value"])
+
+    @property
+    def sell(self):
+        for s,a in self.status["sell"]:
+            yield s,Decimal(a)
+
+    @property
+    def buy(self):
+        for s,a in self.status["buy"]:
+            yield s,Decimal(a)
+
+    @property
+    def order_inflight(self):
+        return [i["order_id"] for i in self.status["orders"]
+            if not i["done"] and not i["cancelled"]]
+
+
+class Rebalancer:
+    def __init__(self, client, name, account_id):
+        self.client = client
+        self.name = name
+        self.account_id = account_id
+        self.portfolio = client.get_portfolio(self.account_id)
+
+    def preflight_sell(self, sell):
+        print ("Preflying the sell requests for account %s: "% self.name)
+        for symbol, value in sell:
+            print("Preflying symbol = %s"%symbol, end = "")
+            req = PreflightRequest(
+                instrument = OrderInstrument(
+                    symbol = symbol,
+                    type = InstrumentType.EQUITY),
+                order_side = OrderSide.SELL,
+                amount = -value,
+                order_type = OrderType.MARKET,
+                expiration = OrderExpirationRequest(
+                    time_in_force = TimeInForce.DAY
+                    )
+                )
+            res = self.client.perform_preflight_calculation(req, account_id=self.account_id)
+            print("done")
+            proceed = res.estimated_proceeds
+            cost_and_fees = -value - proceed
+            print("Proceed from %s: %.2f$ - Fees: %.2f$"%(symbol, proceed, cost_and_fees))
+            yield symbol, proceed, cost_and_fees
+
+
+    def calculate_rebalance(self):
+        allocations = get_target_allocation(self.name)
+        value, cash, positions = parse_portfolio(self.portfolio)
+
+        self.cash_value = cash.value
+        self.sell = []
+        self.buy = []
+
+        cost_and_fees = Decimal('0.0')
+
+        for r in portfolio_allocation_analysis(positions, allocations):
+            name, symbol,current_value, percentage, alloc, cost_basis, change_from_basis = r
+            delta = alloc - percentage
+            if delta < Decimal(-0.05): # Don't sell if difference is less than 0.05%
+                sell_amt = current_value/percentage*delta
+                sell_amt = sell_amt.quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
+                self.sell += [(symbol, sell_amt)]
+            if delta > Decimal('0.0'): # Always buy everything underindexed
+                self.buy += [(symbol, delta)]
+        if len(self.buy) == 0:
+            print("Error, found no underindexed fund to buy")
+            return False
+
+        for symbol, proceed, cf in self.preflight_sell(self.sell):
+            self.cash_value += proceed
+            cost_and_fees += cf
+
+        total_delta = sum(delta for _, delta in self.buy)
+        self.buy = [(symbol, (delta/total_delta)) for symbol, delta in self.buy]
+
+        # Print
+        ops = dict(self.sell+[(i,(j*self.cash_value).quantize(
+            Decimal('0.01'), rounding =decimal.ROUND_HALF_EVEN)) for i,j in self.buy])
+        total_cval = Decimal('0.0')
+        total_ops = Decimal('0.0')
+        total_new = Decimal('0.0')
+        total_pct = Decimal('0.0')
+        choose_table_format(FORMAT_REBALANCE)
+        print_header(name)
+        shown_symbols = []
+        for r in portfolio_allocation_analysis(positions, allocations):
+            "Name","Symbol","Value","Buy Sell","Amount","New Balance","New %"
+            name, symbol,current_value, percentage, alloc, cost_basis, change_from_basis = r
+            op = ops.get(symbol, Decimal('0.0'))
+            buy_sell = "Buy" if op > Decimal('0.0') else "Sell" if op < Decimal('0.0') else "Nothing"
+            new_v = current_value+op
+            new_pct = (new_v/value*100).quantize(Decimal('0.01'), rounding =decimal.ROUND_HALF_EVEN)
+            print_row([name, symbol,current_value, buy_sell, op, new_v, new_pct])
+            total_cval += current_value
+            total_ops += op
+            total_new += new_v
+            total_pct += new_pct
+
+        print_divider()
+        print_row(["Total", "", total_cval, "",
+                total_ops, total_new, total_pct])
+        print_divider()
+        print("Total cost and fees %.2f $"%cost_and_fees)
+        return (len(self.sell) + len(self.buy) > 0)
+
+    def wait_orders(self, checkpoints):
+        orders_failed = False
+        while True:
+            in_flight = checkpoints.order_inflight
+            if len(in_flight) == 0:
+                break
+            for order_id in in_flight:
+                print("Checking order %s"%order_id)
+                res = self.client.get_order(order_id, self.account_id)
+                symbol = res.instrument.symbol
+                status = res.status
+                average_price = res.average_price or Decimal("0.00")
+                filled_quantity = res.filled_quantity or Decimal("0.00")
+                if status == OrderStatus.FILLED:
+                    amount = (average_price * filled_quantity).quantize(
+                        Decimal("0.01"), rounding = decimal.ROUND_HALF_EVEN)
+                    checkpoints.order_done(order_id, amount)
+                    print("Order %s for symbol %s executed for %.2f"%(order_id, symbol, amount))
+                elif status in (OrderStatus.CANCELLED,
+                    OrderStatus.PENDING_CANCEL, OrderStatus.REJECTED,
+                    OrderStatus.EXPIRED, OrderStatus.QUEUED_CANCELLED):
+                    checkpoints.order_cancelled(order_id)
+                    print("Order %s for symbol %s cancelled"%(order_id, symbol))
+                    orders_failed = True
+            sleep(1)
+        return orders_failed
+
+    def place_orders(self, orders, checkpoints):
+        for symbol, amount, side in orders:
+            if symbol not in checkpoints.order_ids: # Check if not placed yet
+                order_id = str(uuid.uuid4())
+                if amount == Decimal("0.00"):
+                    # Skip order and consider it executed
+                    checkpoints.new_order(order_id, symbol)
+                    checkpoints.order_done(order_id, Decimal("0.00"))
+                    continue
+                req = OrderRequest(
+                    instrument = OrderInstrument(
+                        symbol = symbol,
+                        type = InstrumentType.EQUITY
+                    ),
+                    order_side = side,
+                    amount = amount,
+                    order_type = OrderType.MARKET,
+                    expiration = OrderExpirationRequest(
+                        time_in_force = TimeInForce.DAY
+                    ),
+                    order_id = order_id
+                )
+                res = self.client.place_order(req, account_id=self.account_id)
+                print("Placing order to %s %.2f$ of %s" % (
+                    ("buy" if side == OrderSide.BUY else "sell"), amount, symbol))
+                checkpoints.new_order(order_id, symbol)
+
+    def execute_operations(self, checkpoints = None):
+        if checkpoints:
+            chk = checkpoints
+        else:
+            chk = CheckPointer(self.sell, self.buy, self.cash_value, self.name)
+
+        # First place sell orders
+        def sell_orders(checkpoints):
+            for symbol, amount in checkpoints.sell:
+                # Skip rebalancing if below $1.00
+                if -amount < Decimal("1.00"):
+                    amount = Decimal("0.00")
+                yield symbol, -amount, OrderSide.SELL
+        self.place_orders(sell_orders(chk), chk)
+
+        # Wait for order completion
+        orders_failed = self.wait_orders(chk)
+
+        if orders_failed is True:
+            print("Rebalancing Failed selling. Launch the rebalancer to restart")
+            return
+
+        _, cash_value, _ = parse_portfolio(self.client.get_portfolio(self.account_id))
+        # Now place buy orders
+        def buy_orders(checkpoints, cash_value):
+            running_cash_value = cash_value
+            for symbol, perc in checkpoints.buy:
+                amount = (cash_value * perc).quantize(
+                        Decimal("0.01"), rounding = decimal.ROUND_HALF_EVEN)
+                if amount < Decimal("1.00"):
+                    # Skip rebalancing if below $1.00
+                    amount = Decimal("0.00")
+                amount = min(amount, running_cash_value)
+                running_cash_value -= amount
+                # If the residual cash value would be too small, add the residual to this
+                if running_cash_value < Decimal("1.00") and amount + running_cash_value >= Decimal("1.00"):
+                    amount += running_cash_value
+                    running_cash_value = Decimal("0.00")
+                yield symbol, amount, OrderSide.BUY
+                # Note, there are corner cases were cash would be left uninvested, but less
+                # than 1$. Good enough
+        self.place_orders(buy_orders(chk, cash_value.value), chk)
+
+        # Wait for order completion
+        orders_failed = self.wait_orders(chk)
     
+        if orders_failed is True:
+            print("Rebalancing Failed selling. Launch the rebalancer to restart")
+            return
 
+        chk.done()
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -232,8 +481,10 @@ def show(client, account):
 def rebalance(client, account, run):
     for k,v in CHECK_ACCOUNTS.items():
         if not account or k == account:
-            portfolio = client.get_portfolio(v)
-            sell,buy = calculate_rebalance(portfolio, k)
+            rebalancer = Rebalancer(client, k, v)
+            ok = rebalancer.calculate_rebalance()
+            if ok and run is True:
+                rebalancer.execute_operations()
 
 
 def validate_allocations(allocations):
@@ -259,6 +510,11 @@ Total allocation should be 100%%. Found %f" % ((name or "Default (None)"), total
 
 def main():
     args = parse_args()
+
+    chk = CheckPointer.try_load()
+    if chk:
+        print("There is a pending rebalancing transaction. Aborting")
+        return
     
     try:
         with open(".publicdotcom_key") as f:
@@ -271,7 +527,7 @@ def main():
         return
 
     client = PublicApiClient(
-        ApiKeyAuthConfig(api_secret_key=key), 
+        ApiKeyAuthConfig(api_secret_key=key),
         config=PublicApiClientConfiguration()
         )
     if args.action == "show":
