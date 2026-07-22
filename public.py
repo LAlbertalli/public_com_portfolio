@@ -591,13 +591,8 @@ def main():
     account = args.account
     run = args.run
 
-    exec_command(args.action, locals())
-    # if args.action == "show":
-    #     show(client, args.account)
-    # elif args.action == "rebalance":
-    #     rebalance(client, args.account, args.run)
-    # elif args.action == "recover":
-    #     recover(client, chk)
+    return exec_command(args.action, locals())
+
 
 if __name__ == "__main__":
     main()
