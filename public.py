@@ -520,6 +520,18 @@ The allocation should be of type Decimal. '%s' is not" % ((name or "Default (Non
 Total allocation should be 100%%. Found %f" % ((name or "Default (None)"), total_pct))
     return not error
 
+def get_client():
+    try:
+        with open(".publicdotcom_key") as f:
+            key = f.readline()
+    except:
+        print("Error loading the key for public.com from the file .publicdotcom_key")
+        return None
+    return PublicApiClient(
+        ApiKeyAuthConfig(api_secret_key=key),
+        config=PublicApiClientConfiguration()
+        )
+
 
 def main():
     args = parse_args()
@@ -528,21 +540,14 @@ def main():
     if chk and args.action != "recover":
         print("There is a pending rebalancing transaction. Run with action 'recover' to continue")
         return
-    
-    try:
-        with open(".publicdotcom_key") as f:
-            key = f.readline()
-    except:
-        print("Error loading the key for public.com from the file .publicdotcom_key")
-        return
 
     if not validate_allocations(ALLOCATIONS):
         return
 
-    client = PublicApiClient(
-        ApiKeyAuthConfig(api_secret_key=key),
-        config=PublicApiClientConfiguration()
-        )
+    client = get_client()
+    if client is None:
+        return
+
     if args.action == "show":
         show(client, args.account)
     elif args.action == "rebalance":
