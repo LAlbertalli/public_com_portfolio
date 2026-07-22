@@ -1,4 +1,4 @@
-import argparse, decimal, json, os, uuid
+import argparse, decimal, json, os, uuid, inspect
 
 from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig,\
     PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
@@ -6,6 +6,7 @@ from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKey
 from config import ALLOCATIONS, CHECK_ACCOUNTS
 from decimal import Decimal
 from time import sleep
+from functools import wraps
 
 
 FORMAT_SHOW = [
@@ -458,19 +459,37 @@ class Rebalancer:
 
         chk.done()
 
+
+COMMANDS = {}
+
+
+def command(func):
+    global COMMANDS
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    name = func.__name__
+    help_txt = func.__doc__
+    params = inspect.signature(func).parameters
+    COMMANDS[name] = {
+        "f": func, 
+        "help": help_txt, 
+        "params": params
+    }
+    return wrapper
+
 def parse_args():
+    global COMMANDS
     parser = argparse.ArgumentParser(
         description='Help me monitor my portfolio on Public.com and keep it balanced',
         formatter_class = argparse.RawTextHelpFormatter
         )
-    parser.add_argument("action", choices=['show', 'rebalance', 'recover'], 
+    help_txt = "Action to execute:\n"
+    for c in COMMANDS:
+        help_txt+="    -%s: %s\n"%(c, COMMANDS[c]["help"])
+    parser.add_argument("action", choices=[c for c in COMMANDS], 
         default = 'show', 
-        help = "Action to execute:\n\
-    - show: Show the current portfolio\n\
-    - rebalance: Rebalance the portfolio. Notice, without --run,\
- it will only simulate the rebalance\n\
-    - recover: It recovers a previously failed rebalance. \
-Note: it will ignore any other flags",
+        help = help_txt,
         nargs = '?')
     parser.add_argument("-r", "--run", action = 'store_true',
         help = "For rebalance, actually use the public apis to run the planned actions")
@@ -481,14 +500,28 @@ Note: it will ignore any other flags",
     return parser.parse_args()
 
 
+def exec_command(command, loc_arg):
+    global COMMANDS
+    f = COMMANDS[command]["f"]
+    args = []
+    for i in COMMANDS[command]["params"]:
+        args+=[loc_arg[i]]
+    return f(*args)
+
+
+@command
 def show(client, account):
+    """Show the current portfolio"""
     for k,v in CHECK_ACCOUNTS.items():
         if not account or k == account:
             portfolio = client.get_portfolio(v)
             print_account_info(portfolio, k)
 
 
+@command
 def rebalance(client, account, run):
+    """Rebalance the portfolio. Notice, without --run,\
+ it will only simulate the rebalance"""
     for k,v in CHECK_ACCOUNTS.items():
         if not account or k == account:
             rebalancer = Rebalancer(client, k, v)
@@ -496,7 +529,11 @@ def rebalance(client, account, run):
             if ok and run is True:
                 rebalancer.execute_operations()
 
+
+@command
 def recover(client, checkpoints):
+    """It recovers a previously failed rebalance. \
+Note: it will ignore any other flags"""
     if checkpoints is None:
         print("No pending operations to recover")
         return
@@ -539,8 +576,8 @@ def get_client():
 def main():
     args = parse_args()
 
-    chk = CheckPointer.try_load()
-    if chk and args.action != "recover":
+    checkpoints = CheckPointer.try_load()
+    if checkpoints and args.action != "recover":
         print("There is a pending rebalancing transaction. Run with action 'recover' to continue")
         return
 
@@ -551,12 +588,16 @@ def main():
     if client is None:
         return
 
-    if args.action == "show":
-        show(client, args.account)
-    elif args.action == "rebalance":
-        rebalance(client, args.account, args.run)
-    elif args.action == "recover":
-        recover(client, chk)
+    account = args.account
+    run = args.run
+
+    exec_command(args.action, locals())
+    # if args.action == "show":
+    #     show(client, args.account)
+    # elif args.action == "rebalance":
+    #     rebalance(client, args.account, args.run)
+    # elif args.action == "recover":
+    #     recover(client, chk)
 
 if __name__ == "__main__":
     main()
