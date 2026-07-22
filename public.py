@@ -273,7 +273,7 @@ class Rebalancer:
     def preflight_sell(self, sell):
         print ("Preflying the sell requests for account %s: "% self.name)
         for symbol, value in sell:
-            print("Preflying symbol = %s"%symbol, end = "")
+            print("Preflying symbol = %s "%symbol, end = "")
             req = PreflightRequest(
                 instrument = OrderInstrument(
                     symbol = symbol,
