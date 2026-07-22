@@ -497,6 +497,9 @@ def rebalance(client, account, run):
                 rebalancer.execute_operations()
 
 def recover(client, checkpoints):
+    if checkpoints is None:
+        print("No pending operations to recover")
+        return
     r = Rebalancer(client, checkpoints.account, CHECK_ACCOUNTS[checkpoints.account])
     r.execute_operations(checkpoints = checkpoints)
 
