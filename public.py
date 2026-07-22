@@ -1,12 +1,14 @@
-import argparse, decimal, json, os, uuid, inspect
+import argparse, decimal, json, os, uuid, inspect, datetime
 
 from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig,\
     PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
     OrderExpirationRequest, TimeInForce, OrderStatus
+from public_api_sdk.models.history import TransactionType, TransactionSubType, TransactionDirection
 from config import ALLOCATIONS, CHECK_ACCOUNTS
 from decimal import Decimal
 from time import sleep
 from functools import wraps
+from scipy.optimize import newton
 
 
 FORMAT_SHOW = [
@@ -460,6 +462,38 @@ class Rebalancer:
         chk.done()
 
 
+def history_and_stats(client, account_name, account_id):
+    history = client.get_history(account_id=account_id)
+    value, _, _ = parse_portfolio(client.get_portfolio(account_id=account_id))
+    today = datetime.datetime.now(datetime.UTC)
+    transactions = []
+    for t in history.transactions:
+        if t.type == TransactionType.MONEY_MOVEMENT and t.sub_type in (
+            TransactionSubType.MISC, TransactionSubType.DEPOSIT,
+            TransactionSubType.WITHDRAWAL, TransactionSubType.TRANSFER):
+            transactions+=[(
+                t.timestamp,
+                t.net_amount * (-1 if t.direction == TransactionDirection.INCOMING else 1)
+                )]
+    for d,v in transactions:
+        if v>0:
+            print("[%s] Withdrawal of %.2f$"%(d.date(), v))
+        else:
+            print("[%s] Deposit of %.2f$"%(d.date(), -v))
+    print("[%s] Final value: %.2f$"%(today.date(), value))
+
+    transactions += [(today, value)]
+    dates, cash_flows = zip(*((i,float(j)) for i,j in transactions))
+
+    def irr_target(r, dates, cash_flows):
+        t0 = dates[0]
+        # Calculate fractional years from the first deposit date
+        years = [(d - t0).days / 365.0 for d in dates]
+        return sum(cf / ((1 + r) ** y) for cf, y in zip(cash_flows, years))
+    irr = newton(irr_target, 0.1, args=(dates, cash_flows))
+    print("Interal Rate of Return: %.2f%%"%(irr*100))
+
+
 COMMANDS = {}
 
 
@@ -517,6 +551,12 @@ def show(client, account):
             portfolio = client.get_portfolio(v)
             print_account_info(portfolio, k)
 
+@command
+def stats(client, account):
+    """Show account deposit history and calculate performance statistics"""
+    for k,v in CHECK_ACCOUNTS.items():
+        if not account or k == account:
+            history_and_stats(client, k, v)
 
 @command
 def rebalance(client, account, run):
