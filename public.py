@@ -1,4 +1,4 @@
-import argparse, decimal, json, os, uuid, inspect, datetime
+import decimal, json, os, uuid, datetime
 
 from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig,\
     PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
@@ -7,8 +7,9 @@ from public_api_sdk.models.history import TransactionType, TransactionSubType, T
 from config import ALLOCATIONS, CHECK_ACCOUNTS
 from decimal import Decimal
 from time import sleep
-from functools import wraps
 from scipy.optimize import newton
+
+from helper.arghelper import command, exec_command, parse_args
 
 
 FORMAT_SHOW = [
@@ -494,53 +495,6 @@ def history_and_stats(client, account_name, account_id):
     print("Interal Rate of Return: %.2f%%"%(irr*100))
 
 
-COMMANDS = {}
-
-
-def command(func):
-    global COMMANDS
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    name = func.__name__
-    help_txt = func.__doc__
-    params = inspect.signature(func).parameters
-    COMMANDS[name] = {
-        "f": func, 
-        "help": help_txt, 
-        "params": params
-    }
-    return wrapper
-
-def parse_args():
-    global COMMANDS
-    parser = argparse.ArgumentParser(
-        description='Help me monitor my portfolio on Public.com and keep it balanced',
-        formatter_class = argparse.RawTextHelpFormatter
-        )
-    help_txt = "Action to execute:\n"
-    for c in COMMANDS:
-        help_txt+="    -%s: %s\n"%(c, COMMANDS[c]["help"])
-    parser.add_argument("action", choices=[c for c in COMMANDS], 
-        default = 'show', 
-        help = help_txt,
-        nargs = '?')
-    parser.add_argument("-r", "--run", action = 'store_true',
-        help = "For rebalance, actually use the public apis to run the planned actions")
-
-    parser.add_argument("-a", '--account', 
-        help = "Limit to the specified account")
-
-    return parser.parse_args()
-
-
-def exec_command(command, loc_arg):
-    global COMMANDS
-    f = COMMANDS[command]["f"]
-    args = []
-    for i in COMMANDS[command]["params"]:
-        args+=[loc_arg[i]]
-    return f(*args)
 
 
 @command
