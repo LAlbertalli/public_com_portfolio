@@ -11,8 +11,7 @@ from scipy.optimize import newton
 from helper.arghelper import command, exec_command, parse_args
 from helper.tableprint import choose_table_format, string_format, number_format,\
     print_divider, print_header, print_row
-from helper.public_api import get_client
-
+from helper.public_api import get_client, parse_portfolio
 
 FORMAT_SHOW = [
     ("Name", 40, lambda x: string_format(x)),
@@ -61,20 +60,6 @@ def portfolio_allocation_analysis(positions,allocations):
 
 def get_target_allocation(name):
     return ALLOCATIONS.get(name,ALLOCATIONS[None])
-
-
-
-def parse_portfolio(portfolio):
-    value = sum(i.value for i in portfolio.equity)
-    cash = [i for i in portfolio.equity if i.type == 'CASH']
-    if len(cash) == 1:
-        cash = cash[0].value
-    elif len(cash) == 0:
-        cash = Decimal('0.00')
-    else:
-        raise Exception("Received more than one cash position. Aborting")
-    positions = portfolio.positions
-    return value, cash, positions
 
 
 def print_account_info(portfolio, name):
