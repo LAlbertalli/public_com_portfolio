@@ -10,6 +10,8 @@ from time import sleep
 from scipy.optimize import newton
 
 from helper.arghelper import command, exec_command, parse_args
+from helper.tableprint import choose_table_format, string_format, number_format,\
+    print_divider, print_header, print_row
 
 
 FORMAT_SHOW = [
@@ -32,41 +34,6 @@ FORMAT_REBALANCE = [
     ("New Balance", 12, lambda x: number_format(x, "$")),
     ("New %", 12, lambda x: number_format(x, "%")),
     ]
-
-
-# Formatter helper functions
-FORMAT = FORMAT_SHOW
-
-def choose_table_format(format):
-    global FORMAT
-    FORMAT = format
-
-
-def string_format(name, length = 40):
-    if len(name) > length:
-        return name[:length]
-    return name.ljust(length)
-
-
-def number_format(number, symbol, length = 12):
-    return ("%s %s"%(number, symbol)).rjust(length)
-
-
-def print_divider():
-    div_len = sum(i for _,i,_ in FORMAT) + 3 * (len(FORMAT)-1) + 4
-    print("-"* div_len)
-
-
-def print_header(account):
-    print("\n\n Portfolio %s\n"%account)
-    print_divider()
-    print("| "+ " | ".join([string_format(i,j) for i,j,_ in FORMAT]) + " |")
-    print_divider()
-
-
-def print_row(row):
-    print("| " + " | ".join(f(r) for r,(_,_,f) in zip(row,FORMAT)) + " |")
-
 
 def portfolio_allocation_analysis(positions,allocations):
     shown_symbols = []
@@ -493,8 +460,6 @@ def history_and_stats(client, account_name, account_id):
         return sum(cf / ((1 + r) ** y) for cf, y in zip(cash_flows, years))
     irr = newton(irr_target, 0.1, args=(dates, cash_flows))
     print("Interal Rate of Return: %.2f%%"%(irr*100))
-
-
 
 
 @command
