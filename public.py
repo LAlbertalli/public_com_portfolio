@@ -1,7 +1,6 @@
 import decimal, json, os, uuid, datetime
 
-from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig,\
-    PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
+from public_api_sdk import PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
     OrderExpirationRequest, TimeInForce, OrderStatus
 from public_api_sdk.models.history import TransactionType, TransactionSubType, TransactionDirection
 from config import ALLOCATIONS, CHECK_ACCOUNTS
@@ -12,6 +11,7 @@ from scipy.optimize import newton
 from helper.arghelper import command, exec_command, parse_args
 from helper.tableprint import choose_table_format, string_format, number_format,\
     print_divider, print_header, print_row
+from helper.public_api import get_client
 
 
 FORMAT_SHOW = [
@@ -518,18 +518,6 @@ The allocation should be of type Decimal. '%s' is not" % ((name or "Default (Non
             print("Error validating the configuration for %s. \
 Total allocation should be 100%%. Found %f" % ((name or "Default (None)"), total_pct))
     return not error
-
-def get_client():
-    try:
-        with open(".publicdotcom_key") as f:
-            key = f.readline()
-    except:
-        print("Error loading the key for public.com from the file .publicdotcom_key")
-        return None
-    return PublicApiClient(
-        ApiKeyAuthConfig(api_secret_key=key),
-        config=PublicApiClientConfiguration()
-        )
 
 
 def main():
