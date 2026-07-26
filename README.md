@@ -63,11 +63,11 @@ Help me monitor my portfolio on Public.com and keep it balanced
 positional arguments:
   {show,rebalance,recover}
                         Action to execute:
-                            -rebalance: Rebalance the portfolio. Notice, without --run, it will only simulate the rebalance
-                            -reinvest: Reinvest the cash. Don't attempt to rebalance to avoid fees. Notice, without --run, it will only simulate the reinvestment
-                            -recover: It recovers a previously failed rebalance. Note: it will ignore any other flags
-                            -show: Show the current portfolio
-                            -stats: Show account deposit history and calculate performance statistics
+                            - rebalance: Rebalance the portfolio. Notice, without --run, it will only simulate the rebalance
+                            - recover: It recovers a previously failed rebalance. Note: it will ignore any other flags
+                            - reinvest: Reinvest the cash. Don't attempt to rebalance to avoid fees. Notice, without --run, it will only simulate the reinvestment
+                            - show: Show the current portfolio
+                            - stats: Show account deposit history and calculate performance statistics
 
 options:
   -h, --help            show this help message and exit

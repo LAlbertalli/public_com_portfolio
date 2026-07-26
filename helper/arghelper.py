@@ -28,7 +28,7 @@ def parse_args():
         )
     help_txt = "Action to execute:\n"
     for c in COMMANDS:
-        help_txt+="    -%s: %s\n"%(c, COMMANDS[c]["help"])
+        help_txt+="    - %s: %s\n"%(c, COMMANDS[c]["help"])
     parser.add_argument("action", choices=[c for c in COMMANDS], 
         default = 'show', 
         help = help_txt,

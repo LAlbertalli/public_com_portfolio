@@ -356,14 +356,6 @@ def rebalance(client, account, run):
 
 
 @command
-def reinvest(client, account, run):
-    """Reinvest the cash. Don't attempt to rebalance to avoid fees.\
- Notice, without --run,\
- it will only simulate the reinvestment"""
-    rebalance_reinvest(client, account, run, True)
-
-
-@command
 def recover(client, checkpoints):
     """It recovers a previously failed rebalance. \
 Note: it will ignore any other flags"""
@@ -372,3 +364,11 @@ Note: it will ignore any other flags"""
         return
     r = Rebalancer(client, checkpoints.account, get_account(checkpoints.account))
     r.execute_operations(checkpoints = checkpoints)
+
+
+@command
+def reinvest(client, account, run):
+    """Reinvest the cash. Don't attempt to rebalance to avoid fees.\
+ Notice, without --run,\
+ it will only simulate the reinvestment"""
+    rebalance_reinvest(client, account, run, True)
