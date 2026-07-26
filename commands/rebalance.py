@@ -145,11 +145,12 @@ class CheckPointer:
 
 
 class Rebalancer:
-    def __init__(self, client, name, account_id):
+    def __init__(self, client, name, account_id, no_sell = False):
         self.client = client
         self.name = name
         self.account_id = account_id
         self.portfolio = client.get_portfolio(self.account_id)
+        self.no_sell = no_sell
 
     def preflight_sell(self, sell):
         print ("Preflying the sell requests for account %s: "% self.name)
@@ -187,7 +188,7 @@ class Rebalancer:
         for r in portfolio_allocation_analysis(positions, allocations):
             name, symbol,current_value, percentage, alloc, _, _ = r
             delta = alloc - percentage
-            if delta < Decimal("-0.05"): # Don't sell if difference is less than 0.05%
+            if delta < Decimal("-0.05") and not self.no_sell: # Don't sell if difference is less than 0.05%
                 sell_amt = current_value/percentage*delta
                 sell_amt = sell_amt.quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
                 self.sell += [(symbol, sell_amt)]
@@ -338,16 +339,28 @@ class Rebalancer:
 
         chk.done()
 
+def rebalance_reinvest(client, account, run, no_sell):
+    for k,v in get_accounts():
+        if not account or k == account:
+            rebalancer = Rebalancer(client, k, v, no_sell)
+            ok = rebalancer.calculate_rebalance()
+            if ok and run is True:
+                rebalancer.execute_operations()
+
+
 @command
 def rebalance(client, account, run):
     """Rebalance the portfolio. Notice, without --run,\
  it will only simulate the rebalance"""
-    for k,v in get_accounts():
-        if not account or k == account:
-            rebalancer = Rebalancer(client, k, v)
-            ok = rebalancer.calculate_rebalance()
-            if ok and run is True:
-                rebalancer.execute_operations()
+    rebalance_reinvest(client, account, run, False)
+
+
+@command
+def reinvest(client, account, run):
+    """Reinvest the cash. Don't attempt to rebalance to avoid fees.\
+ Notice, without --run,\
+ it will only simulate the reinvestment"""
+    rebalance_reinvest(client, account, run, True)
 
 
 @command
