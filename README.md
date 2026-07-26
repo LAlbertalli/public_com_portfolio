@@ -29,9 +29,11 @@ Click on "Create API Key"; it will open a new tab with the [API Key Page](https:
 in a new file in the same directory as the script, named `.publicdotcom_key`.
 
 ## 3. Configure your portfolio allocation
-Copy the `config.py.tpl` into `config.py`
+In the `config` directory, copy the `config.py.tpl` into `config.py`
 ``` bash
+cd config
 cp config.py.tpl config.py
+cd ..
 ```
 Proceed to configure the accounts you have and their allocations. The template has comments to help. 
 Better instructions soon.

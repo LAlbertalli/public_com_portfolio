@@ -3,7 +3,7 @@ import decimal, json, os, uuid, datetime
 from public_api_sdk import PreflightRequest, OrderRequest, OrderInstrument, InstrumentType, OrderSide, OrderType,\
     OrderExpirationRequest, TimeInForce, OrderStatus
 from public_api_sdk.models.history import TransactionType, TransactionSubType, TransactionDirection
-from config import ALLOCATIONS, CHECK_ACCOUNTS
+# from config import ALLOCATIONS, CHECK_ACCOUNTS
 from decimal import Decimal
 from time import sleep
 from scipy.optimize import newton
@@ -12,6 +12,7 @@ from helper.arghelper import command, exec_command, parse_args
 from helper.tableprint import choose_table_format, string_format, number_format,\
     print_divider, print_header, print_row
 from helper.public_api import get_client, parse_portfolio
+from helper.config_helper import validate_allocations, get_accounts, get_account, get_target_allocation
 
 FORMAT_SHOW = [
     ("Name", 40, lambda x: string_format(x)),
@@ -57,9 +58,6 @@ def portfolio_allocation_analysis(positions,allocations):
             yield ["", symbol, Decimal('0.0'), Decimal('0.0'), 
                 a['allocation'], Decimal('0.0'), Decimal('0.0')]
 
-
-def get_target_allocation(name):
-    return ALLOCATIONS.get(name,ALLOCATIONS[None])
 
 
 def print_account_info(portfolio, name):
@@ -450,7 +448,7 @@ def history_and_stats(client, account_name, account_id):
 @command
 def show(client, account):
     """Show the current portfolio"""
-    for k,v in CHECK_ACCOUNTS.items():
+    for k,v in get_accounts():
         if not account or k == account:
             portfolio = client.get_portfolio(v)
             print_account_info(portfolio, k)
@@ -458,7 +456,7 @@ def show(client, account):
 @command
 def stats(client, account):
     """Show account deposit history and calculate performance statistics"""
-    for k,v in CHECK_ACCOUNTS.items():
+    for k,v in get_accounts():
         if not account or k == account:
             history_and_stats(client, k, v)
 
@@ -466,7 +464,7 @@ def stats(client, account):
 def rebalance(client, account, run):
     """Rebalance the portfolio. Notice, without --run,\
  it will only simulate the rebalance"""
-    for k,v in CHECK_ACCOUNTS.items():
+    for k,v in get_accounts():
         if not account or k == account:
             rebalancer = Rebalancer(client, k, v)
             ok = rebalancer.calculate_rebalance()
@@ -481,28 +479,8 @@ Note: it will ignore any other flags"""
     if checkpoints is None:
         print("No pending operations to recover")
         return
-    r = Rebalancer(client, checkpoints.account, CHECK_ACCOUNTS[checkpoints.account])
+    r = Rebalancer(client, checkpoints.account, get_account(checkpoints.account))
     r.execute_operations(checkpoints = checkpoints)
-
-def validate_allocations(allocations):
-    error = False
-    for name,allocs in allocations.items():
-        total_pct = Decimal('0.0')
-        for symbol, a in allocs.items():
-            try:
-                total_pct += Decimal(a["allocation"])
-            except:
-                pass
-            if type(a["allocation"]) != Decimal:
-                error = True
-                print(
-                    "Error validating the configuration for %s. \
-The allocation should be of type Decimal. '%s' is not" % ((name or "Default (None)"), symbol))
-        if total_pct != Decimal('100.0'):
-            error = True
-            print("Error validating the configuration for %s. \
-Total allocation should be 100%%. Found %f" % ((name or "Default (None)"), total_pct))
-    return not error
 
 
 def main():
@@ -513,7 +491,7 @@ def main():
         print("There is a pending rebalancing transaction. Run with action 'recover' to continue")
         return
 
-    if not validate_allocations(ALLOCATIONS):
+    if not validate_allocations():
         return
 
     client = get_client()

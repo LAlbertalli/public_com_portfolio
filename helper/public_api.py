@@ -1,8 +1,9 @@
+from decimal import Decimal
 from public_api_sdk import PublicApiClient, PublicApiClientConfiguration, ApiKeyAuthConfig
 
 def get_client():
     try:
-        with open(".publicdotcom_key") as f:
+        with open("config/.publicdotcom_key") as f:
             key = f.readline()
     except:
         print("Error loading the key for public.com from the file .publicdotcom_key")
