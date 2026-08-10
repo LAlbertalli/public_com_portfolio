@@ -61,7 +61,7 @@ usage: public.py [-h] [-r] [-a ACCOUNT] [{show,rebalance,recover}]
 Help me monitor my portfolio on Public.com and keep it balanced
 
 positional arguments:
-  {show,rebalance,recover}
+  {rebalance,recover,reinvest,show,stats}
                         Action to execute:
                             - rebalance: Rebalance the portfolio. Notice, without --run, it will only simulate the rebalance
                             - recover: It recovers a previously failed rebalance. Note: it will ignore any other flags
