@@ -81,8 +81,15 @@ The project is not ready to contribute yet. But if you really really really want
 
 **Important:** I chose not to use AI on this project. Please respect this choice! Any PR that smells like AI slop will be refused.
 
+## Minimum check before submitting any PR
+- Check on your public.com account that the change you introduced works
+- Check that you have not used AI. See above
+- Run the linter. I currently use ruff. Install that in your environment with `pip install ruff` and then check with `ruff check`. You may notice it is not clean currently. Clean up Lint error (or publish specs) in the future
+
+
 # TODO
 - Error handling when calling the public.com API is nonexistent. For reading (`show`), this is not a big concern. For writing, the checkpoint capabilities help a lot, but better recovery would help. The general approach: if the error is not recoverable because of API calling logic, don't intercept it. Let it fail! If the error is recoverable (e.g., temporarily unavailable, error 404 due to race conditions), then an error recovery should be attempted.
-- [In progress] The gain/loss calculation in show is pretty crude and doesn't reflect the impact of rebalancing. I should probably build better functionality in the future, especially something to calculate better performance metrics.
+- [In progress] The gain/loss calculation in show is pretty crude and doesn't reflect the impact of rebalancing. ~~I should probably build better functionality in the future, especially something to calculate better performance metrics.~~ Introduced the stats module to see money flow and calculate IRR/TWRR and MRR statistics for this. Not closing it yet because I don't like the formatting
 - See multiple accounts together
 - ~~Refactor into multiple files~~
+- Introduce more details on how to contribute
