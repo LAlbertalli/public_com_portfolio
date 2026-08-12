@@ -93,3 +93,4 @@ The project is not ready to contribute yet. But if you really really really want
 - See multiple accounts together
 - ~~Refactor into multiple files~~
 - Introduce more details on how to contribute
+- Fix Linter warning UP031 (stop use % formatting) and TRY002 (Use custom exceptions)
