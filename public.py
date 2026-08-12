@@ -19,10 +19,7 @@ def main():
     if client is None:
         return
 
-    account = args.account
-    run = args.run
-
-    return exec_command(args.action, locals())
+    return exec_command(args.action, args, locals())
 
 
 if __name__ == "__main__":
