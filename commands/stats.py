@@ -39,7 +39,10 @@ class PriceHistory:
             if d>date:
                 return prev
             prev = q
-        return None
+        #If running out of fetched history return last value but give a warning if of by too much
+        if (date-d).days > 3:
+            print("WARNING, quotes for symbol %s is outdated by %d days" % (symbol, (date-d).days))
+        return prev
 
     def fetch_history_for_symbol(self, symbol, date):
         if self.client is None:
@@ -99,7 +102,11 @@ class PortfolioHistory:
             value = balance['cash']
             for symbol, qty in balance["portfolio"].items():
                 price = price_history.close_for_symbol_at(symbol, day)
-                value += price*qty
+                try:
+                    value += price*qty
+                except:
+                    print(symbol, qty, day, price)
+                    raise
             balance["net_value"] = value.quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
 
     def populate_history(self):
@@ -174,7 +181,43 @@ class PortfolioHistory:
             yield day, balance
 
 
-def history_and_stats(client, account_name, account_id):
+def simulate_etf(history, etf):
+    qty = Decimal("0.00000")
+    for action, date, value in history.get_all_in_out():
+        price = price_history.close_for_symbol_at(etf, date)
+        q = (value / price).quantize(Decimal('0.00001'), rounding = decimal.ROUND_HALF_EVEN)
+        if action == "withdrawal":
+            q = -1*q
+        qty += q
+    final_price = price_history.close_for_symbol_at(etf, history.today)
+    net_value = (qty * final_price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
+    return net_value
+
+def calculate_irr(history):
+    def irr_target(r, dates, cash_flows):
+        t0 = dates[0]
+        # Calculate fractional years from the first deposit date
+        years = [(d - t0).days / 365.0 for d in dates]
+        return sum(cf / ((1 + r) ** y) for cf, y in zip(cash_flows, years))
+
+    dates, cash_flows = zip(*((d,float(-v if a!= "final" else v)) for a,d,v in history.get_all_in_out(today = True)))
+    return newton(irr_target, 0.1, args=(dates, cash_flows))
+
+def calculate_twrr_atwrr(history):
+    balances = list(history.get_balance_in_out_days(today = True))
+    twrr = Decimal("1.0000")
+    for i in range(len(balances) - 1):
+        initial_balance = balances[i][1]
+        final_balance = balances[i+1][1]
+        change = (final_balance["balance"]["net_value"] - final_balance["in_out_flow"]) - initial_balance["balance"]["net_value"]
+        return_rate = change/initial_balance["balance"]["net_value"]+ Decimal("1.00")
+        twrr *= return_rate
+    years = Decimal((balances[-1][0] - balances[0][0]).days) / 365
+    atwrr = twrr**(1/years) - Decimal("1.000")
+    twrr -= Decimal("1.0000")
+    return twrr, atwrr
+
+def history_and_stats(client, account_name, account_id, compare):
     history = PortfolioHistory(client, account_name, account_id)
 
     print("Account %s:"%account_name)
@@ -192,39 +235,32 @@ def history_and_stats(client, account_name, account_id):
     print("This happens because public.com reports the value in real time while stats looks at closing price")
     print("The difference is usually small but need to be considered when larger than normal")
     if abs(final_value - value)/final_value > Decimal("0.005"):
-        print("Value discrepancy: %.2f$ %.2f$\n"%(final_value, balance['balance']['net_value']))
+        print("Value discrepancy: %.2f$ %.2f$\n"%(final_value, value))
     print()
+    final_value = value
 
     # IRR/MWRR
-    def irr_target(r, dates, cash_flows):
-        t0 = dates[0]
-        # Calculate fractional years from the first deposit date
-        years = [(d - t0).days / 365.0 for d in dates]
-        return sum(cf / ((1 + r) ** y) for cf, y in zip(cash_flows, years))
-
-    dates, cash_flows = zip(*((d,float(-v if a!= "final" else v)) for a,d,v in history.get_all_in_out(today = True)))
-    irr = newton(irr_target, 0.1, args=(dates, cash_flows))
+    irr = calculate_irr(history)
     print("Interal Rate of Return: %.2f%%"%(irr*100))
 
     # TWRR
-    balances = list(history.get_balance_in_out_days(today = True))
-    twrr = Decimal("1.0000")
-    for i in range(len(balances) - 1):
-        initial_balance = balances[i][1]
-        final_balance = balances[i+1][1]
-        change = (final_balance["balance"]["net_value"] - final_balance["in_out_flow"]) - initial_balance["balance"]["net_value"]
-        return_rate = change/initial_balance["balance"]["net_value"]+ Decimal("1.00")
-        twrr *= return_rate
-    years = Decimal((balances[-1][0] - balances[0][0]).days) / 365
-    atwrr = twrr**(1/years) - Decimal("1.000")
-    twrr -= Decimal("1.0000")
+    twrr, atwrr = calculate_twrr_atwrr(history)
     print("Time Weighted Rate of Return: %.2f%%"%(twrr*100))
     print("Annualized Time Weighted Rate of Return: %.2f%%\n\n"%(atwrr*100))
 
+    if compare:
+        etfs = compare.split(",")
+        for etf in etfs:
+            sim_value = simulate_etf(history, etf)
+            diff = final_value - sim_value
+            pdiff = diff/final_value*100
+            print("Investing in %s would have yield %.2f$. A Net difference of %.2f$ (%.2f%%)" % (etf, sim_value, diff, pdiff))
+
 
 @command
-def stats(client, account):
-    """Show account deposit history and calculate performance statistics"""
+def stats(client, account, compare):
+    """Show account deposit history and calculate performance statistics
+    -c --compare: compares against target ETF. Multiple accepted as comma separated list"""
     for k,v in get_accounts():
         if not account or k == account:
-            history_and_stats(client, k, v)
+            history_and_stats(client, k, v, compare)
