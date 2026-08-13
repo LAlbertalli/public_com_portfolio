@@ -49,7 +49,7 @@ def parse_doc_string(doc_string):
             opt_args += [(args, arg_help)]
         else:
             help_txt += '\n' + l
-        return help_txt, opt_args
+    return help_txt, opt_args
 
 def command(func):
     global COMMANDS #noqa: PLW0602
