@@ -16,7 +16,7 @@ def get_accounts():
 		yield name, aid
 
 def get_account(name):
-	return ACCOUNTS[name]
+	return ACCOUNTS.get(name, None)
 
 def validate_allocations():
     error = False

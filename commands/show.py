@@ -2,7 +2,7 @@ import decimal
 from decimal import Decimal
 
 from helper.arghelper import command
-from helper.config_helper import get_accounts, get_target_allocation
+from helper.config_helper import get_account, get_accounts, get_target_allocation
 from helper.portfolio import parse_portfolio, portfolio_allocation_analysis
 from helper.tableprint import (
     choose_table_format,
@@ -78,7 +78,15 @@ def print_account_info(portfolio, name):
 @command
 def show(client, account):
     """Show the current portfolio"""
-    for k,v in get_accounts():
-        if not account or k == account:
-            portfolio = client.get_portfolio(v)
-            print_account_info(portfolio, k)
+    if account:
+        account_id = get_account(account)
+        if account_id is None:
+            print("ERROR: Account %s not found"%account)
+            return
+        accounts = [(account, account_id)]
+    else:
+        accounts = get_accounts()
+
+    for name, aid in accounts:
+        portfolio = client.get_portfolio(aid)
+        print_account_info(portfolio, name)

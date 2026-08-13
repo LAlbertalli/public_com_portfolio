@@ -340,12 +340,20 @@ class Rebalancer:
         chk.done()
 
 def rebalance_reinvest(client, account, run, no_sell):
-    for k,v in get_accounts():
-        if not account or k == account:
-            rebalancer = Rebalancer(client, k, v, no_sell)
-            ok = rebalancer.calculate_rebalance()
-            if ok and run is True:
-                rebalancer.execute_operations()
+    if account:
+        account_id = get_account(account)
+        if account_id is None:
+            print("ERROR: Account %s not found"%account)
+            return
+        accounts = [(account, account_id)]
+    else:
+        accounts = get_accounts()
+
+    for name, aid in accounts:
+        rebalancer = Rebalancer(client, name, aid, no_sell)
+        ok = rebalancer.calculate_rebalance()
+        if ok and run is True:
+            rebalancer.execute_operations()
 
 
 @command

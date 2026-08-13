@@ -15,7 +15,7 @@ from public_api_sdk.models.history import (
 from scipy.optimize import newton
 
 from helper.arghelper import command
-from helper.config_helper import get_accounts
+from helper.config_helper import get_account, get_accounts
 from helper.portfolio import parse_portfolio
 
 
@@ -261,6 +261,14 @@ def history_and_stats(client, account_name, account_id, compare):
 def stats(client, account, compare):
     """Show account deposit history and calculate performance statistics
     -c --compare: compares against target ETF. Multiple accepted as comma separated list"""
-    for k,v in get_accounts():
-        if not account or k == account:
-            history_and_stats(client, k, v, compare)
+    if account:
+        account_id = get_account(account)
+        if account_id is None:
+            print("ERROR: Account %s not found"%account)
+            return
+        accounts = [(account, account_id)]
+    else:
+        accounts = get_accounts()
+
+    for name, aid in accounts:
+        history_and_stats(client, name, aid, compare)
