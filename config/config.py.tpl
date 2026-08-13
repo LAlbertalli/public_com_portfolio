@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-CHECK_ACCOUNTS = {
+ACCOUNTS = {
 #    "Account1": "5xxxx",
 #    "Account2": "5yyyy"
 }
