@@ -1,16 +1,22 @@
 from decimal import Decimal
 
-from config.config import ALLOCATIONS, CHECK_ACCOUNTS
+from config.config import ALLOCATIONS
+try:
+	from config.config import ACCOUNTS
+except:
+	from config.config import CHECK_ACCOUNTS
+	ACCOUNTS = CHECK_ACCOUNTS
+	print("Deprecation Warning. CHECK_ACCOUNTS is deprecated, replace with ACCOUNTS")
 
 def get_target_allocation(name):
     return ALLOCATIONS.get(name,ALLOCATIONS[None])
 
 def get_accounts():
-	for name, aid in CHECK_ACCOUNTS.items():
+	for name, aid in ACCOUNTS.items():
 		yield name, aid
 
 def get_account(name):
-	return CHECK_ACCOUNTS[name]
+	return ACCOUNTS[name]
 
 def validate_allocations():
     error = False
