@@ -4,19 +4,10 @@ from functools import wraps
 
 COMMANDS = {}
 
-
-def command(func):
-    global COMMANDS #noqa: PLW0602
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-    name = func.__name__
-    if name in COMMANDS:
-        raise Exception("Command %s already registered" % name)
-    doc = func.__doc__.splitlines()
+def parse_doc_string(doc_string):
     help_txt = ""
     opt_args = []
-    for l in doc:
+    for l in doc_string.splitlines():
         l=l.strip()
         if l[0] == "-":
             idx = l.index(":")
@@ -58,7 +49,18 @@ def command(func):
             opt_args += [(args, arg_help)]
         else:
             help_txt += '\n' + l
+        return help_txt, opt_args
 
+def command(func):
+    global COMMANDS #noqa: PLW0602
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    name = func.__name__
+    if name in COMMANDS:
+        raise Exception("Command %s already registered" % name)
+    
+    help_txt, opt_args = parse_doc_string(func.__doc__)
     params = inspect.signature(func).parameters
     COMMANDS[name] = {
         "f": func, 
