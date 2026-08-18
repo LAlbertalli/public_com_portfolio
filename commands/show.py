@@ -70,10 +70,9 @@ def print_account_info(portfolio, name):
     if abs_delts_reb or cash_reb:
         print("Suggested to rebalance this portfolio. Causes:")
         if abs_delts_reb:
-            print("- Portfolio is out of balance of %.2f%%. Max is %.2f%%"%(
-                abs_delta, len(allocations) * Decimal('0.15')))
+            print(f"- Portfolio is out of balance of {abs_delta:.2f}%. Max is {len(allocations) * Decimal('0.15'):.2f}%")
         if cash_reb:
-            print("- Portfolio has excessive cash balance %.2f$. Max is 20$"%(cash))
+            print(f"- Portfolio has excessive cash balance {cash:.2f}$. Max is 20$")
 
 @command
 def show(client, account):
@@ -81,7 +80,7 @@ def show(client, account):
     if account:
         account_id = get_account(account)
         if account_id is None:
-            print("ERROR: Account %s not found"%account)
+            print(f"ERROR: Account {account} not found")
             return
         accounts = [(account, account_id)]
     else:

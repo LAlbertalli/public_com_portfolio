@@ -39,6 +39,8 @@ FORMAT_REBALANCE = [
     ("New %", 12, lambda x: number_format(x, "%")),
     ]
 
+class CheckPointerException(Exception):
+    pass
 
 class CheckPointer:
     filename = ".checkpoint.json"
@@ -83,7 +85,7 @@ class CheckPointer:
 
     def order_done(self, order_id, amount):
         try:
-            i = [i for i in self.status["orders"] if i["order_id"] == order_id][0]
+            i = [i for i in self.status["orders"] if i["order_id"] == order_id].next()
         except IndexError:
             return
         i["amount"] = str(amount)
@@ -92,7 +94,7 @@ class CheckPointer:
 
     def order_cancelled(self, order_id):
         try:
-            i = [i for i in self.status["orders"] if i["order_id"] == order_id][0]
+            i = [i for i in self.status["orders"] if i["order_id"] == order_id].next()
         except IndexError:
             return
         i["cancelled"] = True
@@ -101,7 +103,7 @@ class CheckPointer:
 
     def done(self):
         if not self.all_done:
-            raise Exception("done() called but not all transaction are completed")
+            raise CheckPointerException("done() called but not all transaction are completed")
         os.remove(self.filename)
 
     @property
@@ -153,9 +155,9 @@ class Rebalancer:
         self.no_sell = no_sell
 
     def preflight_sell(self, sell):
-        print ("Preflying the sell requests for account %s: "% self.name)
+        print (f"Preflying the sell requests for account {self.name}:")
         for symbol, value in sell:
-            print("Preflying symbol = %s "%symbol, end = "")
+            print(f"Preflying symbol = {symbol} ", end = "")
             req = PreflightRequest(
                 instrument = OrderInstrument(
                     symbol = symbol,
@@ -171,7 +173,7 @@ class Rebalancer:
             print("done")
             proceed = res.estimated_proceeds
             cost_and_fees = -value - proceed
-            print("Proceed from %s: %.2f$ - Fees: %.2f$"%(symbol, proceed, cost_and_fees))
+            print(f"Proceed from {symbol}: {proceed:.2f}$ - Fees: {cost_and_fees:.2f}$")
             yield symbol, proceed, cost_and_fees
 
 
@@ -230,7 +232,7 @@ class Rebalancer:
         print_row(["Total", "", total_cval, "",
                 total_ops, total_new, total_pct])
         print_divider()
-        print("Total cost and fees %.2f $"%cost_and_fees)
+        print(f"Total cost and fees {cost_and_fees:.2f} $")
         return (len(self.sell) + len(self.buy) > 0)
 
     def wait_orders(self, checkpoints):
@@ -240,7 +242,7 @@ class Rebalancer:
             if len(in_flight) == 0:
                 break
             for order_id in in_flight:
-                print("Checking order %s"%order_id)
+                print(f"Checking order {order_id}")
                 res = self.client.get_order(order_id, self.account_id)
                 symbol = res.instrument.symbol
                 status = res.status
@@ -250,12 +252,12 @@ class Rebalancer:
                     amount = (average_price * filled_quantity).quantize(
                         Decimal("0.01"), rounding = decimal.ROUND_HALF_EVEN)
                     checkpoints.order_done(order_id, amount)
-                    print("Order %s for symbol %s executed for %.2f"%(order_id, symbol, amount))
+                    print(f"Order {order_id} for symbol {symbol} executed for {amount:.2f}")
                 elif status in (OrderStatus.CANCELLED,
                     OrderStatus.PENDING_CANCEL, OrderStatus.REJECTED,
                     OrderStatus.EXPIRED, OrderStatus.QUEUED_CANCELLED):
                     checkpoints.order_cancelled(order_id)
-                    print("Order %s for symbol %s cancelled"%(order_id, symbol))
+                    print(f"Order {order_id} for symbol {symbol} cancelled")
                     orders_failed = True
             sleep(1)
         return orders_failed
@@ -283,8 +285,9 @@ class Rebalancer:
                     order_id = order_id
                 )
                 self.client.place_order(req, account_id=self.account_id)
-                print("Placing order to %s %.2f$ of %s" % (
-                    ("buy" if side == OrderSide.BUY else "sell"), amount, symbol))
+                print(
+    f"Placing order to {("buy" if side == OrderSide.BUY else "sell")} {amount:.2f}$ of {symbol}"
+                )
                 checkpoints.new_order(order_id, symbol)
 
     def execute_operations(self, checkpoints = None):
@@ -343,7 +346,7 @@ def rebalance_reinvest(client, account, run, no_sell):
     if account:
         account_id = get_account(account)
         if account_id is None:
-            print("ERROR: Account %s not found"%account)
+            print(f"ERROR: Account {account} not found")
             return
         accounts = [(account, account_id)]
     else:
