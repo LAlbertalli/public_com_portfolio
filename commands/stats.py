@@ -307,7 +307,7 @@ def history_and_stats(client, account_name, account_id, compare):
 @command
 def stats(client, account, compare, group):
     """Show account deposit history and calculate performance statistics
-    -c --compare: compares against target ETF. Multiple accepted as comma separated list
+    -c --compare: compares against target ETF. Multiple accepted as comma-separated list
     -g --group: Show the transactions and statistics for a group of accounts all together
     """
     if group:

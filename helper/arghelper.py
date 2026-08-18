@@ -107,7 +107,7 @@ def parse_args():
     
     # Global optional params
     parser.add_argument("-r", "--run", action = 'store_true',
-        help = "For rebalance, actually use the public apis to run the planned actions")
+        help = "For rebalance, actually use the public.com APIs to run the planned actions")
     parser.add_argument("-a", '--account', 
         help = "Limit to the specified account")
 
