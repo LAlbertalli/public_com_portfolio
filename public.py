@@ -1,6 +1,6 @@
 from commands import CheckPointer
 from helper.arghelper import exec_command, parse_args
-from helper.config_helper import validate_allocations
+from helper.config_helper import validate_configs
 from helper.public_api import get_client
 
 
@@ -12,7 +12,7 @@ def main():
         print("There is a pending rebalancing transaction. Run with action 'recover' to continue")
         return
 
-    if not validate_allocations():
+    if not validate_configs():
         return
 
     client = get_client()

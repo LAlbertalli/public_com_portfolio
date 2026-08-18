@@ -19,3 +19,8 @@ ALLOCATIONS = {
 #        }, 
     },
 }
+
+GROUPINGS = {
+#     "Alias": ["Account1", "Account2"],
+#     "Alias2": ["Account2", "Account3"],
+}

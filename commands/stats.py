@@ -15,7 +15,7 @@ from public_api_sdk.models.history import (
 from scipy.optimize import newton
 
 from helper.arghelper import command
-from helper.config_helper import get_account, get_accounts
+from helper.config_helper import get_account, get_accounts, get_group
 from helper.portfolio import parse_portfolio
 
 
@@ -63,16 +63,15 @@ class PriceHistory:
 price_history = PriceHistory()
 
 class PortfolioHistory:
-    def __init__(self, client, account_name, account_id):
+    def __init__(self, client, account_name, account_id, *args):
         self.client = client
-        self.account_name = account_name
-        self.account_id = account_id
+        self.account_names = (account_name,) + args[::2]
+        self.account_ids = (account_id,) + args[1::2]
 
         self.populate_history()
 
-    def fetch_transaction_history(self):
-        history = self.client.get_history(account_id=self.account_id)
-        self.transactions = []
+    def fetch_transaction_history(self, name, account_id):
+        history = self.client.get_history(account_id = account_id)
         for t in history.transactions:
             if t.type == TransactionType.MONEY_MOVEMENT and t.sub_type in (
                 TransactionSubType.MISC, TransactionSubType.DEPOSIT,
@@ -80,20 +79,20 @@ class PortfolioHistory:
                 day = t.timestamp.date()
                 net_amount = t.net_amount
                 action = 'deposit' if t.direction == TransactionDirection.INCOMING else 'withdrawal'
-                self.transactions += [(action, day, net_amount,None, None)]
+                self.transactions += [(name, action, day, net_amount,None, None)]
             if t.type == TransactionType.MONEY_MOVEMENT and \
                     t.sub_type == TransactionSubType.DIVIDEND:
                 day = t.timestamp.date()
                 net_amount = t.net_amount
-                self.transactions += [('dividend', day, net_amount,None, None)]
+                self.transactions += [(name, 'dividend', day, net_amount,None, None)]
             if t.type == TransactionSubType.TRADE:
                 day = t.timestamp.date()
                 net_amount = t.net_amount
                 symbol = t.symbol
                 qty = t.quantity
-                self.transactions += [('trade', day, net_amount,symbol, qty)]
+                self.transactions += [(name, 'trade', day, net_amount,symbol, qty)]
 
-        self.transactions = sorted(self.transactions, key = lambda x:x[1])
+        self.transactions = sorted(self.transactions, key = lambda x:x[2])
 
     def fill_net_value(self):
         price_history.set_client(self.client)
@@ -111,7 +110,9 @@ class PortfolioHistory:
 
     def populate_history(self):
         self.today = datetime.datetime.now(datetime.UTC).date()
-        self.fetch_transaction_history()
+        self.transactions = []
+        for name, account_id in zip(self.account_names,self.account_ids):
+            self.fetch_transaction_history(name, account_id)
 
         self.history = {}
         balance = {
@@ -119,7 +120,7 @@ class PortfolioHistory:
             "portfolio": {},
             "net_value": Decimal("0.00"),
         }
-        for action, day, value, symbol, qty in self.transactions:
+        for _, action, day, value, symbol, qty in self.transactions:
             if day not in self.history:
                 self.history[day] = {
                     "balance": None,
@@ -152,18 +153,18 @@ class PortfolioHistory:
         self.fill_net_value()
 
     def get_all_in_out(self, balance = False, today = False):
-        for action, day, value, _, _ in self.transactions:
+        for name, action, day, value, _, _ in self.transactions:
             if action in ("deposit", "withdrawal"):
                 if balance:
-                    yield action, day, value, self.history[day]
+                    yield name, action, day, value, self.history[day]
                 else:
-                    yield action, day, value
+                    yield name, action, day, value
         if today:
             today_value = self.history[self.today]["balance"]["net_value"]
             if balance:
-                yield "final", self.today, today_value, self.history[self.today]
+                yield None, "final", self.today, today_value, self.history[self.today]
             else:
-                yield "final", self.today, today_value
+                yield None, "final", self.today, today_value
 
     def get_today_value(self, balance = False):
         today_value = self.history[self.today]["balance"]["net_value"]
@@ -174,7 +175,7 @@ class PortfolioHistory:
 
     def get_balance_in_out_days(self, today = False):
         prev_day = None
-        for _, day, _value, balance in self.get_all_in_out(balance = True, today = today):
+        for _, _, day, _value, balance in self.get_all_in_out(balance = True, today = today):
             if day == prev_day:
                 continue
             prev_day = day
@@ -183,7 +184,7 @@ class PortfolioHistory:
 
 def simulate_etf(history, etf):
     qty = Decimal("0.00000")
-    for action, date, value in history.get_all_in_out():
+    for _, action, date, value in history.get_all_in_out():
         price = price_history.close_for_symbol_at(etf, date)
         q = (value / price).quantize(Decimal('0.00001'), rounding = decimal.ROUND_HALF_EVEN)
         if action == "withdrawal":
@@ -200,7 +201,7 @@ def calculate_irr(history):
         years = [(d - t0).days / 365.0 for d in dates]
         return sum(cf / ((1 + r) ** y) for cf, y in zip(cash_flows, years))
 
-    dates, cash_flows = zip(*((d,float(-v if a!= "final" else v)) for a,d,v in history.get_all_in_out(today = True)))
+    dates, cash_flows = zip(*((d,float(-v if a!= "final" else v)) for n,a,d,v in history.get_all_in_out(today = True)))
     return newton(irr_target, 0.1, args=(dates, cash_flows))
 
 def calculate_twrr_atwrr(history):
@@ -217,11 +218,54 @@ def calculate_twrr_atwrr(history):
     twrr -= Decimal("1.0000")
     return twrr, atwrr
 
+def history_and_stats_group(client, group_name, ids, compare):
+    flatten_ids = (i for j in ids for i in j)
+    history = PortfolioHistory(client, *flatten_ids)
+
+    print("Group %s:"%group_name)
+    for account, action, day, value in history.get_all_in_out(today = True):
+        match action:
+            case "deposit":
+                print("[%s] Deposit of %.2f$ in %s"%(day, value, account))
+            case "withdrawal":
+                print("[%s] Withdrawal of %.2f$ from %s"%(day, value, account))
+            case "final":
+                print("[%s] Final value: %.2f$"%(day, value))
+
+    final_value = Decimal("0.00")
+    for _, i in ids:
+        f_value, _, _ = parse_portfolio(client.get_portfolio(account_id=i))
+        final_value += f_value
+    print("\nWARNING! There is a discrepancy between calculated net_value and reported current net_value")
+    print("This happens because public.com reports the value in real time while stats looks at closing price")
+    print("The difference is usually small but need to be considered when larger than normal")
+    if abs(final_value - value)/final_value > Decimal("0.005"):
+        print("Value discrepancy: %.2f$ %.2f$\n"%(final_value, value))
+    print()
+    final_value = value
+
+    # IRR/MWRR
+    irr = calculate_irr(history)
+    print("Interal Rate of Return: %.2f%%"%(irr*100))
+
+    # TWRR
+    twrr, atwrr = calculate_twrr_atwrr(history)
+    print("Time Weighted Rate of Return: %.2f%%"%(twrr*100))
+    print("Annualized Time Weighted Rate of Return: %.2f%%\n\n"%(atwrr*100))
+
+    if compare:
+        etfs = compare.split(",")
+        for etf in etfs:
+            sim_value = simulate_etf(history, etf)
+            diff = final_value - sim_value
+            pdiff = diff/final_value*100
+            print("Investing in %s would have yield %.2f$. A Net difference of %.2f$ (%.2f%%)" % (etf, sim_value, diff, pdiff))
+
 def history_and_stats(client, account_name, account_id, compare):
     history = PortfolioHistory(client, account_name, account_id)
 
     print("Account %s:"%account_name)
-    for action, day, value in history.get_all_in_out(today = True):
+    for _, action, day, value in history.get_all_in_out(today = True):
         match action:
             case "deposit":
                 print("[%s] Deposit of %.2f$"%(day, value))
@@ -258,17 +302,23 @@ def history_and_stats(client, account_name, account_id, compare):
 
 
 @command
-def stats(client, account, compare):
+def stats(client, account, compare, group):
     """Show account deposit history and calculate performance statistics
-    -c --compare: compares against target ETF. Multiple accepted as comma separated list"""
-    if account:
+    -c --compare: compares against target ETF. Multiple accepted as comma separated list
+    -g --group: Show the transactions and statistics for a group of accounts all together
+    """
+    if group:
+        ids = get_group(group)
+        if ids == []:
+            print("ERROR: Group %s not found"%group)
+            return
+        history_and_stats_group(client, group, ids, compare)
+    elif account:
         account_id = get_account(account)
         if account_id is None:
             print("ERROR: Account %s not found"%account)
             return
-        accounts = [(account, account_id)]
+        history_and_stats(client, account, account_id, compare)
     else:
-        accounts = get_accounts()
-
-    for name, aid in accounts:
-        history_and_stats(client, name, aid, compare)
+        for name, aid in get_accounts():
+            history_and_stats(client, name, aid, compare)
