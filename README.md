@@ -71,26 +71,33 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  -r, --run             For rebalance, actually use the public apis to run the planned actions
+  -r, --run             For rebalance, actually use the public.com APIs to run the planned actions
   -a, --account ACCOUNT
                         Limit to the specified account
+  -c, --compare COMPARE
+                        [Only stats] compares against target ETF. Multiple accepted as comma-separated list
+  -g, --group GROUP     [Only stats] Show the transactions and statistics for a group of accounts all together
 ```
 
 # Contribute
-The project is not ready to contribute yet. But if you really really really want to contribute, just send me a PR.
+This project is not really thought for other people to contribute as it is my personal tool. Anyway, if you think there is value in contributing to it, I suggest you send me a PR with the changes you want to make after having checked the instructions below. 
+
+If you have an idea for large changes, I suggest we discuss it by opening an Issue describing the change rather than going straight to implementing it.
 
 **Important:** I chose not to use AI on this project. Please respect this choice! Any PR that smells like AI slop will be refused.
 
 ## Minimum check before submitting any PR
-- Check on your public.com account that the change you introduced works
+- Check using your public.com account that the change you introduced works
 - Check that you have not used AI. See above
-- Run the linter. I currently use ruff. Install that in your environment with `pip install ruff` and then check with `ruff check`. You may notice it is not clean currently. Clean up Lint error (or publish specs) in the future
+- Run the linter. I currently use ruff. Install it in your environment with `pip install ruff`, then check with `ruff check`.
+- Submit a PR explaining what you are contributing and why.
 
 
 # TODO
 - Error handling when calling the public.com API is nonexistent. For reading (`show`), this is not a big concern. For writing, the checkpoint capabilities help a lot, but better recovery would help. The general approach: if the error is not recoverable because of API calling logic, don't intercept it. Let it fail! If the error is recoverable (e.g., temporarily unavailable, error 404 due to race conditions), then an error recovery should be attempted.
 - [In progress] The gain/loss calculation in show is pretty crude and doesn't reflect the impact of rebalancing. ~~I should probably build better functionality in the future, especially something to calculate better performance metrics.~~ Introduced the stats module to see money flow and calculate IRR/TWRR and MRR statistics for this. Not closing it yet because I don't like the formatting
-- See multiple accounts together
+- ~~See multiple accounts together~~ See multiple accounts together in Show (not sure it is useful)
 - ~~Refactor into multiple files~~
-- Introduce more details on how to contribute
-- Fix Linter warning UP031 (stop use % formatting) and TRY002 (Use custom exceptions)
+- ~~Introduce more details on how to contribute~~
+- ~~Fix Linter warning UP031 (stop use % formatting) and TRY002 (Use custom exceptions)~~
+- Add support for regular Mutual Funds in Compare
