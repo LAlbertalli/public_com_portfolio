@@ -43,29 +43,29 @@ def validate_allocations():
             if type(a["allocation"]) != Decimal:
                 error = True
                 print(
-                    "Error validating the configuration for %s. \
-The allocation should be of type Decimal. '%s' is not" % ((name or "Default (None)"), symbol))
+                    f"Error validating the configuration for {(name or "Default (None)")}. \
+The allocation should be of type Decimal. '{symbol}' is not")
         if total_pct != Decimal('100.0'):
             error = True
-            print("Error validating the configuration for %s. \
-Total allocation should be 100%%. Found %f" % ((name or "Default (None)"), total_pct))
+            print(f"Error validating the configuration for {(name or "Default (None)")}. \
+Total allocation should be 100%. Found {total_pct:.2}%")
     return not error
 
 def validate_groupings():
     error = False
     for group, accounts in GROUPINGS.items():
         if group in ACCOUNTS:
-            print("Error validating the configuration for group %s. \
-Group name cannot be also an account name" % group)
+            print(f"Error validating the configuration for group {group}. \
+Group name cannot be also an account name")
             error = True
         if type(accounts) != list:
-            print("Error validating the configuration for group %s. \
-The group definition should be a list of accounts" % group)
+            print(f"Error validating the configuration for group {group}. \
+The group definition should be a list of accounts")
             error = True
         else:
             for account in accounts:
                 if account not in ACCOUNTS:
-                    print("Error validating the configuration for group %s. \
-Account %s does not exists" % (group, account))
+                    print(f"Error validating the configuration for group {group}. \
+Account {account} does not exists" % (group, account))
                     error = True
     return not error

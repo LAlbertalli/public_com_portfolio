@@ -1,6 +1,9 @@
 from decimal import Decimal
 
 
+class PortfolioParsingException(Exception):
+    pass
+
 def portfolio_allocation_analysis(positions,allocations):
     shown_symbols = []
     for p in positions:
@@ -32,6 +35,6 @@ def parse_portfolio(portfolio):
     elif len(cash) == 0:
         cash = Decimal('0.00')
     else:
-        raise Exception("Received more than one cash position. Aborting")
+        raise PortfolioParsingException("Received more than one cash position. Aborting")
     positions = portfolio.positions
     return value, cash, positions
