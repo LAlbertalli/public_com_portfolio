@@ -19,6 +19,9 @@ from helper.config_helper import get_account, get_accounts, get_group
 from helper.portfolio import parse_portfolio
 
 
+class PriceHistoryClientException(Exception):
+    pass
+
 class PriceHistory:
     def __init__(self):
         self.client = None
@@ -41,12 +44,12 @@ class PriceHistory:
             prev = q
         #If running out of fetched history return last value but give a warning if of by too much
         if (date-d).days > 3:
-            print("WARNING, quotes for symbol %s is outdated by %d days" % (symbol, (date-d).days))
+            print(f"WARNING, quotes for symbol {symbol} is outdated by {(date-d).days} days")
         return prev
 
     def fetch_history_for_symbol(self, symbol, date):
         if self.client is None:
-            raise Exception("set_client not called before using the class")
+            raise PriceHistoryClientException("set_client not called before using the class")
         data = self.client.get_bars(
             symbol = symbol,
             instrument_type = InstrumentType.EQUITY,
@@ -222,15 +225,15 @@ def history_and_stats_group(client, group_name, ids, compare):
     flatten_ids = (i for j in ids for i in j)
     history = PortfolioHistory(client, *flatten_ids)
 
-    print("Group %s:"%group_name)
+    print(f"Group {group_name}:")
     for account, action, day, value in history.get_all_in_out(today = True):
         match action:
             case "deposit":
-                print("[%s] Deposit of %.2f$ in %s"%(day, value, account))
+                print(f"[{day}] Deposit of {value:.2f}$ in {account}")
             case "withdrawal":
-                print("[%s] Withdrawal of %.2f$ from %s"%(day, value, account))
+                print(f"[{day}] Withdrawal of {value:.2f}$ from {account}")
             case "final":
-                print("[%s] Final value: %.2f$"%(day, value))
+                print(f"[{day}] Final value: {value:.2f}$")
 
     final_value = Decimal("0.00")
     for _, i in ids:
@@ -240,18 +243,18 @@ def history_and_stats_group(client, group_name, ids, compare):
     print("This happens because public.com reports the value in real time while stats looks at closing price")
     print("The difference is usually small but need to be considered when larger than normal")
     if abs(final_value - value)/final_value > Decimal("0.005"):
-        print("Value discrepancy: %.2f$ %.2f$\n"%(final_value, value))
+        print(f"Value discrepancy: {final_value:.2f}$ {value:.2f}$\n")
     print()
     final_value = value
 
     # IRR/MWRR
     irr = calculate_irr(history)
-    print("Interal Rate of Return: %.2f%%"%(irr*100))
+    print(f"Interal Rate of Return: {irr*100:.2f}%")
 
     # TWRR
     twrr, atwrr = calculate_twrr_atwrr(history)
-    print("Time Weighted Rate of Return: %.2f%%"%(twrr*100))
-    print("Annualized Time Weighted Rate of Return: %.2f%%\n\n"%(atwrr*100))
+    print(f"Time Weighted Rate of Return: {twrr*100:.2f}%")
+    print(f"Annualized Time Weighted Rate of Return: {atwrr*100:.2f}%\n\n")
 
     if compare:
         etfs = compare.split(",")
@@ -259,27 +262,27 @@ def history_and_stats_group(client, group_name, ids, compare):
             sim_value = simulate_etf(history, etf)
             diff = final_value - sim_value
             pdiff = diff/final_value*100
-            print("Investing in %s would have yield %.2f$. A Net difference of %.2f$ (%.2f%%)" % (etf, sim_value, diff, pdiff))
+            print(f"Investing in {etf} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
 
 def history_and_stats(client, account_name, account_id, compare):
     history = PortfolioHistory(client, account_name, account_id)
 
-    print("Account %s:"%account_name)
+    print(f"Account {account_name}:")
     for _, action, day, value in history.get_all_in_out(today = True):
         match action:
             case "deposit":
-                print("[%s] Deposit of %.2f$"%(day, value))
+                print(f"[{day}] Deposit of {value:.2f}$")
             case "withdrawal":
-                print("[%s] Withdrawal of %.2f$"%(day, value))
+                print(f"[{day}] Withdrawal of {value:.2f}$")
             case "final":
-                print("[%s] Final value: %.2f$"%(day, value))
+                print(f"[{day}] Final value: {value:.2f}$")
 
     final_value, _, _ = parse_portfolio(client.get_portfolio(account_id=account_id))
     print("\nWARNING! There is a discrepancy between calculated net_value and reported current net_value")
     print("This happens because public.com reports the value in real time while stats looks at closing price")
     print("The difference is usually small but need to be considered when larger than normal")
     if abs(final_value - value)/final_value > Decimal("0.005"):
-        print("Value discrepancy: %.2f$ %.2f$\n"%(final_value, value))
+        print(f"Value discrepancy: {final_value:.2f}$ {value:.2f}$\n")
     print()
     final_value = value
 
@@ -298,7 +301,7 @@ def history_and_stats(client, account_name, account_id, compare):
             sim_value = simulate_etf(history, etf)
             diff = final_value - sim_value
             pdiff = diff/final_value*100
-            print("Investing in %s would have yield %.2f$. A Net difference of %.2f$ (%.2f%%)" % (etf, sim_value, diff, pdiff))
+            print(f"Investing in {etf} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
 
 
 @command
@@ -310,13 +313,13 @@ def stats(client, account, compare, group):
     if group:
         ids = get_group(group)
         if ids == []:
-            print("ERROR: Group %s not found"%group)
+            print(f"ERROR: Group {group} not found")
             return
         history_and_stats_group(client, group, ids, compare)
     elif account:
         account_id = get_account(account)
         if account_id is None:
-            print("ERROR: Account %s not found"%account)
+            print(f"ERROR: Account {account} not found")
             return
         history_and_stats(client, account, account_id, compare)
     else:
