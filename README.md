@@ -100,4 +100,4 @@ If you have an idea for large changes, I suggest we discuss it by opening an Iss
 - ~~Refactor into multiple files~~
 - ~~Introduce more details on how to contribute~~
 - ~~Fix Linter warning UP031 (stop use % formatting) and TRY002 (Use custom exceptions)~~
-- Add support for regular Mutual Funds in Compare
+- ~~Add support for regular Mutual Funds in Compare~~
