@@ -58,10 +58,16 @@ class PriceHistory:
         )
         bars = data.regular_market.bars
         quotes = [(self.parse_date(i.timestamp),i.close) for i in bars]
-        self.parsed_history[symbol] = sorted(quotes, key = lambda x:x[0])
+        # if multiple data points for the same day, keep the last one
+        quotes = sorted(quotes, key = lambda x:x[0])
+        # TODO: Should use pandas?
+        idx = list(enumerate(quotes))
+        idx = [max(i for i,(j,_) in idx if j.date() == n) for n in set(n.date() for _,(n,_) in idx)]
+        quotes = [(i.date(), c) for e,(i,c) in enumerate(quotes) if e in idx]
+        self.parsed_history[symbol] = quotes
 
     def parse_date(self, date_string):
-        return datetime.datetime.fromisoformat(date_string[:-6]).date()
+        return datetime.datetime.fromisoformat(date_string[:-6])
 
 price_history = PriceHistory()
 
