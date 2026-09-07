@@ -62,7 +62,7 @@ class PriceHistory:
         quotes = sorted(quotes, key = lambda x:x[0])
         # TODO: Should use pandas?
         idx = list(enumerate(quotes))
-        idx = [max(i for i,(j,_) in idx if j.date() == n) for n in set(n.date() for _,(n,_) in idx)]
+        idx = [max(i for i,(j,_) in idx if j.date() == n) for n in {n.date() for _,(n,_) in idx}]
         quotes = [(i.date(), c) for e,(i,c) in enumerate(quotes) if e in idx]
         self.parsed_history[symbol] = quotes
 
