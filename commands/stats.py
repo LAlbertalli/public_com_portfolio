@@ -17,6 +17,7 @@ from scipy.optimize import newton
 from helper.arghelper import command
 from helper.config_helper import get_account, get_accounts, get_group
 from helper.portfolio import parse_portfolio
+from helper.yfinance_history import yf_fetch_history_for_symbol
 
 
 class PriceHistoryClientException(Exception):
@@ -50,12 +51,24 @@ class PriceHistory:
     def fetch_history_for_symbol(self, symbol, date):
         if self.client is None:
             raise PriceHistoryClientException("set_client not called before using the class")
+        # If it is a closed fund, not found on Public, use YFinance
+        if len(symbol) == 5 and symbol[-1] == 'X':
+            quotes = yf_fetch_history_for_symbol(symbol, date)
+            self.parsed_history[symbol] = quotes
+            return
+        # Prefer public.com otherwise
         data = self.client.get_bars(
             symbol = symbol,
             instrument_type = InstrumentType.EQUITY,
             period = BarPeriod.SINCE_PURCHASE,
             purchase_date = date
         )
+        # But if ticker not on public, try Yahoo! Finance
+        if data.total_expected_bars == 0:
+            quotes = yf_fetch_history_for_symbol(symbol, date)
+            self.parsed_history[symbol] = quotes
+            return
+
         bars = data.regular_market.bars
         quotes = [(self.parse_date(i.timestamp),i.close) for i in bars]
         # if multiple data points for the same day, keep the last one
