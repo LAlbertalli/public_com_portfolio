@@ -20,7 +20,12 @@ ALLOCATIONS = {
     },
 }
 
-GROUPINGS = {
-#     "Alias": ["Account1", "Account2"],
+GROUPINGS = { # Groups to use for the --group option
+#     "Alias": ["Account1", "Account2"], # Each account should appear in the ACCOUNTS dict above
 #     "Alias2": ["Account2", "Account3"],
+}
+
+COMPARISONS = { # Named comparisons for the --compare option
+#    "Alias": ["Ticker1", "Ticker2", "Ticker3"], # List of valid Ticker Symbol
+#    "Alias2": ["Ticker1", "Ticker4", "Ticker5"],
 }

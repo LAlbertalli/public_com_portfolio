@@ -75,7 +75,7 @@ options:
   -a, --account ACCOUNT
                         Limit to the specified account
   -c, --compare COMPARE
-                        [Only stats] compares against target ETF. Multiple accepted as comma-separated list
+                        [Only stats] compares against target ETF. Can use name from config or multiple accepted as comma-separated list
   -g, --group GROUP     [Only stats] Show the transactions and statistics for a group of accounts all together
 ```
 

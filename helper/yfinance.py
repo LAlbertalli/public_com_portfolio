@@ -14,3 +14,11 @@ def yf_fetch_history_for_symbol(symbol, date):
 		) for t,c in history.to_dict().items()]
 	quotes = sorted(quotes, key = lambda x:x[0])
 	return quotes
+
+def yf_validate_ticker(symbol):
+	ticker = yf.Ticker(symbol)
+	try:
+		ticker.fast_info['currency']
+		return True
+	except KeyError:
+		return False

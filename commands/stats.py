@@ -15,9 +15,15 @@ from public_api_sdk.models.history import (
 from scipy.optimize import newton
 
 from helper.arghelper import command
-from helper.config_helper import get_account, get_accounts, get_group
+from helper.config_helper import (
+    TicketNotFoundException,
+    get_account,
+    get_accounts,
+    get_comparison,
+    get_group,
+)
 from helper.portfolio import parse_portfolio
-from helper.yfinance_history import yf_fetch_history_for_symbol
+from helper.yfinance import yf_fetch_history_for_symbol
 
 
 class PriceHistoryClientException(Exception):
@@ -276,12 +282,11 @@ def history_and_stats_group(client, group_name, ids, compare):
     print(f"Annualized Time Weighted Rate of Return: {atwrr*100:.2f}%\n\n")
 
     if compare:
-        etfs = compare.split(",")
-        for etf in etfs:
-            sim_value = simulate_etf(history, etf)
+        for ticker in compare:
+            sim_value = simulate_etf(history, ticker)
             diff = final_value - sim_value
             pdiff = diff/final_value*100
-            print(f"Investing in {etf} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
+            print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
 
 def history_and_stats(client, account_name, account_id, compare):
     history = PortfolioHistory(client, account_name, account_id)
@@ -315,20 +320,26 @@ def history_and_stats(client, account_name, account_id, compare):
     print("Annualized Time Weighted Rate of Return: %.2f%%\n\n"%(atwrr*100))
 
     if compare:
-        etfs = compare.split(",")
-        for etf in etfs:
-            sim_value = simulate_etf(history, etf)
+        for ticker in compare:
+            sim_value = simulate_etf(history, ticker)
             diff = final_value - sim_value
             pdiff = diff/final_value*100
-            print(f"Investing in {etf} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
+            print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
 
 
 @command
 def stats(client, account, compare, group):
     """Show account deposit history and calculate performance statistics
-    -c --compare: compares against target ETF. Multiple accepted as comma-separated list
+    -c --compare: compares against target ETF. Can use name from config or multiple accepted as comma-separated list
     -g --group: Show the transactions and statistics for a group of accounts all together
     """
+    
+    try:
+        compare = get_comparison(compare)
+    except TicketNotFoundException as e:
+        print(e.message)
+        return
+
     if group:
         ids = get_group(group)
         if ids == []:

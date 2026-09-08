@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from config.config import ALLOCATIONS, GROUPINGS
+from config.config import ALLOCATIONS, COMPARISONS, GROUPINGS
+from helper.yfinance import yf_validate_ticker
 
 try:
     from config.config import ACCOUNTS
@@ -8,6 +9,11 @@ except ModuleNotFoundError:
     from config.config import CHECK_ACCOUNTS
     ACCOUNTS = CHECK_ACCOUNTS
     print("Deprecation Warning. CHECK_ACCOUNTS is deprecated, replace with ACCOUNTS")
+
+
+class TicketNotFoundException(Exception):
+    def __init__(self, message):
+        self.message = message
 
 def get_target_allocation(name):
     return ALLOCATIONS.get(name,ALLOCATIONS[None])
@@ -21,11 +27,20 @@ def get_account(name):
 def get_group(name):
     return [(n,ACCOUNTS[n]) for n in GROUPINGS.get(name, [])]
 
+def get_comparison(compare):
+    comparisons = COMPARISONS.get(compare, compare.split(','))
+    for symbol in comparisons:
+        if not yf_validate_ticker(symbol):
+            raise TicketNotFoundException(f"Symbol '{symbol}' for {compare} not found")
+    return comparisons
+
+
 def validate_configs():
     return all((
         validate_accounts(),
         validate_allocations(),
         validate_groupings(),
+        validate_comparisons(),
         ))
 
 def validate_accounts():
@@ -69,3 +84,12 @@ The group definition should be a list of accounts")
 Account {account} does not exists" % (group, account))
                     error = True
     return not error
+
+def validate_comparisons():
+    for name, tickers in COMPARISONS.items():
+        if type(tickers) != list:
+            print(f"Error validating the configuration for comparisons {name}. \
+The comparison definition should be a list of tickers")
+            return False
+    return True
+
