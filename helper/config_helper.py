@@ -28,6 +28,8 @@ def get_group(name):
     return [(n,ACCOUNTS[n]) for n in GROUPINGS.get(name, [])]
 
 def get_comparison(compare):
+    if compare is None:
+        return None
     comparisons = COMPARISONS.get(compare, compare.split(','))
     for symbol in comparisons:
         if not yf_validate_ticker(symbol):
