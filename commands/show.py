@@ -37,7 +37,10 @@ def print_account_info(portfolio, name):
     choose_table_format(FORMAT_SHOW)
 
     print_header(name)
-    for r in portfolio_allocation_analysis(positions, allocations):
+    for r in sorted(
+            portfolio_allocation_analysis(positions, allocations),
+            key = lambda x:x[1]
+            ):
         name, symbol,current_value, percentage, alloc, cost_basis, change_from_basis = r
         delta = alloc - percentage
         print_row([name, symbol,current_value, percentage, delta, 
