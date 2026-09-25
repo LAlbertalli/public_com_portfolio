@@ -16,7 +16,7 @@ from scipy.optimize import newton
 
 from helper.arghelper import command
 from helper.config_helper import (
-    TicketNotFoundException,
+    TickerNotFoundException,
     get_account,
     get_accounts,
     get_comparison,
@@ -336,7 +336,7 @@ def stats(client, account, compare, group):
     
     try:
         compare = get_comparison(compare)
-    except TicketNotFoundException as e:
+    except TickerNotFoundException as e:
         print(e.message)
         return
 

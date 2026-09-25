@@ -11,7 +11,7 @@ except ModuleNotFoundError:
     print("Deprecation Warning. CHECK_ACCOUNTS is deprecated, replace with ACCOUNTS")
 
 
-class TicketNotFoundException(Exception):
+class TickerNotFoundException(Exception):
     def __init__(self, message):
         self.message = message
 
@@ -31,7 +31,7 @@ def get_comparison(compare):
     comparisons = COMPARISONS.get(compare, compare.split(','))
     for symbol in comparisons:
         if not yf_validate_ticker(symbol):
-            raise TicketNotFoundException(f"Symbol '{symbol}' for {compare} not found")
+            raise TickerNotFoundException(f"Symbol '{symbol}' for {compare} not found")
     return comparisons
 
 
