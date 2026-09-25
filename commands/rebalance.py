@@ -85,8 +85,8 @@ class CheckPointer:
 
     def order_done(self, order_id, amount):
         try:
-            i = [i for i in self.status["orders"] if i["order_id"] == order_id].next()
-        except IndexError:
+            i = next(i for i in self.status["orders"] if i["order_id"] == order_id)
+        except StopIteration:
             return
         i["amount"] = str(amount)
         i["done"] = True
@@ -94,8 +94,8 @@ class CheckPointer:
 
     def order_cancelled(self, order_id):
         try:
-            i = [i for i in self.status["orders"] if i["order_id"] == order_id].next()
-        except IndexError:
+            i = next(i for i in self.status["orders"] if i["order_id"] == order_id)
+        except StopIteration:
             return
         i["cancelled"] = True
         i["done"] = True
