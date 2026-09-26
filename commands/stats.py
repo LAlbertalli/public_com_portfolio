@@ -277,7 +277,7 @@ def history_and_stats_group(client, group_name, ids, compare):
 
     # IRR/MWRR
     irr = calculate_irr(history)
-    print(f"Interal Rate of Return: {irr*100:.2f}%")
+    print(f"Internal Rate of Return: {irr*100:.2f}%")
 
     # TWRR
     twrr, atwrr = calculate_twrr_atwrr(history)
@@ -315,7 +315,7 @@ def history_and_stats(client, account_name, account_id, compare):
 
     # IRR/MWRR
     irr = calculate_irr(history)
-    print("Interal Rate of Return: %.2f%%"%(irr*100))
+    print("Internal Rate of Return: %.2f%%"%(irr*100))
 
     # TWRR
     twrr, atwrr = calculate_twrr_atwrr(history)
