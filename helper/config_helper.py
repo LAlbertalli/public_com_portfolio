@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from config.config import ALLOCATIONS, COMPARISONS, GROUPINGS
+from config.config import ALLOCATIONS, COMPARISONS, GROUPINGS, HISTORY_IGNORE
 from helper.yfinance import yf_validate_ticker
 
 try:
@@ -94,4 +94,3 @@ def validate_comparisons():
 The comparison definition should be a list of tickers")
             return False
     return True
-

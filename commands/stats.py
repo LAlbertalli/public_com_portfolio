@@ -21,6 +21,7 @@ from helper.config_helper import (
     get_accounts,
     get_comparison,
     get_group,
+    HISTORY_IGNORE
 )
 from helper.portfolio import parse_portfolio
 from helper.yfinance import yf_fetch_history_for_symbol
@@ -101,6 +102,8 @@ class PortfolioHistory:
     def fetch_transaction_history(self, name, account_id):
         history = self.client.get_history(account_id = account_id)
         for t in history.transactions:
+            if t.id in HISTORY_IGNORE:
+                continue
             if t.type == TransactionType.MONEY_MOVEMENT and t.sub_type in (
                 TransactionSubType.MISC, TransactionSubType.DEPOSIT,
                 TransactionSubType.WITHDRAWAL, TransactionSubType.TRANSFER):

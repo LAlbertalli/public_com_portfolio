@@ -29,3 +29,9 @@ COMPARISONS = { # Named comparisons for the --compare option
 #    "Alias": ["Ticker1", "Ticker2", "Ticker3"], # List of valid Ticker Symbol
 #    "Alias2": ["Ticker1", "Ticker4", "Ticker5"],
 }
+
+
+HISTORY_IGNORE = { # Set of transaction to ignore for stats calculation. 
+#    "Transaction_ID1", # The transaction id is the id received in transaction. Looks like a UUID
+#    "Transaction_ID2", # Use comments to document the change
+}
