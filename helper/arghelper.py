@@ -123,6 +123,7 @@ def parse_args():
     action = parsed.action
     for args, defs in opt_args.items():
         dest = args[-1][2:] if args[-1][1] == "-" else args[-1][1:]
+        dest = dest.replace("-", "_")
         if getattr(parsed, dest) and not any(c == action for c,_ in defs):
             parser.error(f"{args[-1]} can be used only with commands {[c for c,_ in defs]}")
 
