@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from config.config import ALLOCATIONS, COMPARISONS, GROUPINGS, HISTORY_IGNORE
+from config.config import (
+    ALLOCATIONS,
+    COMPARISONS,
+    GROUPINGS,
+    HISTORY_IGNORE,  # noqa: F401
+)
 from helper.yfinance import yf_validate_ticker
 
 try:
