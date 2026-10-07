@@ -45,9 +45,10 @@ I do not guarantee this works as intended. There can be bugs, so use caution
 
 To use it, just call `python3 public.py`
 
-It offers two main functionalities:
+It offers three main functionalities:
 - The first one, `show`, is a quick summary of your current portfolio and how it has deviated from the target allocation.
-- The second one, `rebalance`, calculates what ETF to buy and sell to rebalance your portfolio.
+- The second one, `rebalance`, calculates what ETF to buy and sell to rebalance your portfolio. This comes in a `reinvest` variant to just reinvest received dividends without actually selling. It will try to make the portfolio better balanced by actively buying what is underindexed
+- The third one, `stats`, provide some statistics about the investment. It provides options to compare it against one or more funds (both open ETF and mutual funds).
 
 The rebalance function can write to public and execute the changes it calculates. Use the `-r` flag to 
 actually do the rebalance. It has a pretty robust checkpointing functionality to recover in case of bugs on my side or 
@@ -75,8 +76,10 @@ options:
   -a, --account ACCOUNT
                         Limit to the specified account
   -c, --compare COMPARE
-                        [Only stats] compares against target ETF. Can use name from config or multiple accepted as comma-separated list
+                        [Only stats] Compares against target ETF. Can use name from config or multiple accepted as comma-separated list
   -g, --group GROUP     [Only stats] Show the transactions and statistics for a group of accounts all together
+  --delay-etf DELAY_ETF
+                        [Only stats] Delay the start of the comparison to account for different market timing. Date formatted as YYY-MM-DD
 ```
 
 # Contribute
