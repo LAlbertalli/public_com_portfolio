@@ -264,35 +264,49 @@ class PortfolioHistory:
 
 
 
-def simulate_etf_history(history, etf):
+def simulate_etf_history(history, etf, delay_etf):
+    delay_etf = delay_etf or datetime.date(1,1,1)
+    delay_cash = Decimal("0.00") # Cash to accumlate before delay date
     qty = Decimal("0.00000")
-    for _, action, date, value in history.get_all_in_out():
+    for _, action, date, value in history.get_all_in_out(today = True):
+        if date < delay_etf:
+            delay_cash += -value if action == "withdrawal" else value
+            yield date, qty, delay_cash
+            continue
+        if date >= delay_etf and delay_cash > Decimal("0.00"):
+            price = price_history.close_for_symbol_at(etf, delay_etf)
+            qty += (delay_cash / price).quantize(Decimal('0.00001'), rounding = decimal.ROUND_HALF_EVEN)
+            delay_cash = Decimal("0.00") # Zero so no need to accumulate
+            yield delay_etf, qty, delay_cash
+        if action == "final":
+            continue
         price = price_history.close_for_symbol_at(etf, date)
         q = (value / price).quantize(Decimal('0.00001'), rounding = decimal.ROUND_HALF_EVEN)
         if action == "withdrawal":
             q = -1*q
         qty += q
-        yield date, qty
+        yield date, qty, delay_cash
 
-def simulate_etf_at_period(history, etf, date_range):
-    etf_history = {i:j for i,j in simulate_etf_history(history, etf)}
+def simulate_etf_at_period(history, etf, date_range, delay_etf):
+    etf_history = {i:(j,k) for i,j,k in simulate_etf_history(history, etf, delay_etf)}
     dates = sorted(chain(etf_history.keys(), date_range.range()))
     qty = Decimal('0.00000')
+    c = Decimal('0.00')
     prev = date_range.start - datetime.timedelta(days = 1) # start
     for d in dates:
         if d == prev:
             continue
         prev = d
         if d in etf_history:
-            qty = etf_history[d]
+            qty, c = etf_history[d]
         if not date_range.filter(d):
             continue
         price = price_history.close_for_symbol_at(etf, d)
-        value = (qty * price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
+        value = (c + qty * price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
         yield d, value
 
-def simulate_etf(history, etf):
-    for _, qty in simulate_etf_history(history, etf): pass
+def simulate_etf(history, etf, delay_etf):
+    for _, qty, _ in simulate_etf_history(history, etf, delay_etf): pass
     final_price = price_history.close_for_symbol_at(etf, history.today)
     net_value = (qty * final_price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
     return net_value
@@ -303,13 +317,17 @@ def trendline(dates, values):
     trend_values = np.poly1d([slope,intercept])(x)
     return slope, intercept, trend_values
 
-def plot_time_series(data, tickers, cash_history):
+def plot_time_series(data, tickers, cash_history, delay_etf):
     fig, (ax1, ax2, ax3) = plt.subplots(3,1, figsize=(12,9))
     colormap = {name: plt.cm.tab20.colors[e%len(plt.cm.tab20.colors)] for e, name in enumerate(["Portfolio"] + tickers)}
     dates, values = zip(*cash_history)
     ax1.step(dates, values, label = "Cash in and out", where = 'post', color = colormap["Portfolio"], linestyle = "--")
     ax1.plot(data['dates'], data['portfolio'], label = "Portfolio", color = colormap["Portfolio"])
     cash_values = []
+    if delay_etf:
+        discard_idx = min(e for e,i in enumerate(data['dates']) if i >= delay_etf)
+    else:
+        discard_idx = 0
     i = 0
     for d in data['dates']:
         try:
@@ -318,30 +336,41 @@ def plot_time_series(data, tickers, cash_history):
         except IndexError:
             pass
         cash_values+=[cash_history[i][1]]
-    ax2.plot(data['dates'],[i-j for i,j in zip(data['portfolio'], cash_values)], label = "Portfolio", color = colormap["Portfolio"])
+    ax2.plot(data['dates'][discard_idx:],
+        [i-j for i,j in zip(data['portfolio'], cash_values)][discard_idx:],
+        label = "Portfolio", color = colormap["Portfolio"])
     for t in tickers:
         ax1.plot(data['dates'], data[t], label = t, color = colormap[t])
-        ax2.plot(data['dates'], [i-j for i,j in zip(data[t], cash_values)], label = t, color = colormap[t])
+        ax2.plot(data['dates'][discard_idx:],
+            [i-j for i,j in zip(data[t], cash_values)][discard_idx:], 
+            label = t, color = colormap[t])
         values_d = [
             (i-j)/i*100 if i!=Decimal("0.00") else Decimal("0.00") 
             for i,j in zip(data['portfolio'], data[t])]
-        ax3.plot(data['dates'], values_d,
+        ax3.plot(data['dates'][discard_idx:], values_d[discard_idx:],
             label = t, color = colormap[t])
-        slope, intercept, trend_values = trendline(data['dates'], values_d)
-        ax3.plot(data['dates'], trend_values, label = f"{t} y = {slope:.2f}x + {intercept:.2f}", color = colormap[t], linestyle = "--")
+        slope, intercept, trend_values = trendline(data['dates'][discard_idx:], values_d[discard_idx:])
+        ax3.plot(data['dates'][discard_idx:], trend_values, label = f"{t} y = {slope:.2f}x + {intercept:.2f}", color = colormap[t], linestyle = "--")
 
+    xlim = (
+        data["dates"][0] + datetime.timedelta(days = -1),
+        data["dates"][-1] + datetime.timedelta(days = +1)
+        )
     ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax1.grid()
     ax1.set_ylabel("$")
     ax1.set_title("Equivalent Value")
+    ax1.set_xlim(*xlim)
     ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax2.grid()
     ax2.set_ylabel("$")
     ax2.set_title("Gain/Loss")
+    ax2.set_xlim(*xlim)
     ax3.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax3.grid()
     ax3.set_ylabel("%")
     ax3.set_title("Difference (trendline is annualized)")
+    ax3.set_xlim(*xlim)
     fig.tight_layout()
     plt.show()
 
@@ -369,7 +398,7 @@ def calculate_twrr_atwrr(history):
     twrr -= Decimal("1.0000")
     return twrr, atwrr
 
-def history_and_stats_group(client, group_name, ids, compare):
+def history_and_stats_group(client, group_name, ids, compare, delay_etf):
     flatten_ids = (i for j in ids for i in j)
     history = PortfolioHistory(client, *flatten_ids)
 
@@ -417,15 +446,15 @@ def history_and_stats_group(client, group_name, ids, compare):
         acc = Decimal("0.00")
         cash_history = [(d, acc := acc + v) for d,v in cash_history]
         for ticker in compare:
-            sim_value = simulate_etf(history, ticker)
-            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range)]
+            sim_value = simulate_etf(history, ticker, delay_etf)
+            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range, delay_etf)]
             diff = final_value - sim_value
             pdiff = diff/final_value*100
             print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
-        plot_time_series(data, compare, cash_history)
+        plot_time_series(data, compare, cash_history, delay_etf)
         
 
-def history_and_stats(client, account_name, account_id, compare):
+def history_and_stats(client, account_name, account_id, compare, delay_etf):
     history = PortfolioHistory(client, account_name, account_id)
 
     print(f"Account {account_name}:")
@@ -469,19 +498,20 @@ def history_and_stats(client, account_name, account_id, compare):
         acc = Decimal("0.00")
         cash_history = [(d, acc := acc + v) for d,v in cash_history]
         for ticker in compare:
-            sim_value = simulate_etf(history, ticker)
-            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range)]
+            sim_value = simulate_etf(history, ticker, delay_etf)
+            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range, delay_etf)]
             diff = final_value - sim_value
             pdiff = diff/final_value*100
             print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
-        plot_time_series(data, compare, cash_history)
+        plot_time_series(data, compare, cash_history, delay_etf)
 
 
 @command
-def stats(client, account, compare, group):
+def stats(client, account, group, compare, delay_etf):
     """Show account deposit history and calculate performance statistics
-    -c --compare: compares against target ETF. Can use name from config or multiple accepted as comma-separated list
+    -c --compare: Compares against target ETF. Can use name from config or multiple accepted as comma-separated list
     -g --group: Show the transactions and statistics for a group of accounts all together
+    --delay-etf: Delay the start of the comparison to account for different market timing. Date formatted as YYY-MM-DD
     """
     
     price_history.set_client(client) # Set the client when starting
@@ -492,18 +522,29 @@ def stats(client, account, compare, group):
         print(e.message)
         return
 
+    if delay_etf and not compare:
+        print("No comparison set but passed --delay-etf. --delay-etf can be used only with --compare")
+        return
+
+    if delay_etf:
+        try:
+            delay_etf = datetime.date.fromisoformat(delay_etf)
+        except ValueError as e:
+            print(e.args[0])
+            return
+
     if group:
         ids = get_group(group)
         if ids == []:
             print(f"ERROR: Group {group} not found")
             return
-        history_and_stats_group(client, group, ids, compare)
+        history_and_stats_group(client, group, ids, compare, delay_etf)
     elif account:
         account_id = get_account(account)
         if account_id is None:
             print(f"ERROR: Account {account} not found")
             return
-        history_and_stats(client, account, account_id, compare)
+        history_and_stats(client, account, account_id, compare, delay_etf)
     else:
         for name, aid in get_accounts():
-            history_and_stats(client, name, aid, compare)
+            history_and_stats(client, name, aid, compare, delay_etf)
