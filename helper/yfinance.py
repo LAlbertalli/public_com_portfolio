@@ -1,3 +1,4 @@
+import datetime
 import decimal
 from decimal import Decimal
 
@@ -13,6 +14,15 @@ def yf_fetch_history_for_symbol(symbol, date):
 			Decimal(c).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
 		) for t,c in history.to_dict().items()]
 	quotes = sorted(quotes, key = lambda x:x[0])
+	if quotes[-1][0] != datetime.datetime.now(datetime.UTC).date():
+		# We don't have data for today, trying from metadata
+		date = ticker.history_metadata['regularMarketTime'].date()
+		if date != quotes[-1][0]:
+			# We have today data, appending it
+			price = Decimal(
+				ticker.history_metadata['regularMarketPrice']
+				).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
+			quotes += [(date, price)]
 	return quotes
 
 def yf_validate_ticker(symbol):
