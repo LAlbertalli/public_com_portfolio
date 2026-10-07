@@ -33,6 +33,34 @@ from helper.yfinance import yf_fetch_history_for_symbol
 class PriceHistoryClientException(Exception):
     pass
 
+
+
+class DateRange:
+    def __init__(self, start, end, week_pattern = None):
+        self.end = end
+        self.week_pattern = week_pattern or [0,2,4]
+        wd = start.weekday()
+        if wd in self.week_pattern:
+            diff = 0
+        elif wd < min(self.week_pattern):
+            diff = 7 - max(self.week_pattern) + wd
+        else:
+            diff = wd - max(i for i in self.week_pattern if i<wd)
+        self.start = start - datetime.timedelta(days = diff)
+
+    def filter(self, date):
+        return self._filter(date.weekday())
+
+    def _filter(self, wd):
+        return wd % 7 in self.week_pattern
+
+    def range(self):
+        wd = self.start.weekday()
+        for i in range((self.end - self.start).days +1):
+            if self._filter(wd+i):
+                yield self.start + datetime.timedelta(days = i)
+
+
 class PriceHistory:
     def __init__(self):
         self.client = None
@@ -186,6 +214,9 @@ class PortfolioHistory:
 
         self.fill_net_value()
 
+    def get_start(self):
+        return min(self.history.keys())
+
     def get_all_in_out(self, balance = False, today = False):
         for name, action, day, value, _, _ in self.transactions:
             if action in ("deposit", "withdrawal"):
@@ -215,23 +246,17 @@ class PortfolioHistory:
             prev_day = day
             yield day, balance
 
-    def get_net_value_end_of_week(self, start = None):
-        hstart = start
-        start = min(self.history.keys()) # Note, in theory is sorted. Min is more readable
-        if hstart is None:
-            hstart = start + datetime.timedelta(
-                days = ((-3 - start.weekday()) if (4 - start.weekday()) > 0 else (4 - start.weekday())))
-        dates = (hstart+datetime.timedelta(days=i) for i in range(0,(self.today-hstart).days,7))
-        dates = sorted(chain(self.history.keys(), dates))
+    def get_net_value_at_period(self, date_range):
+        dates = sorted(chain(self.history.keys(), date_range.range()))
         bcash = {'cash' : Decimal('0.00'), 'portfolio': {}}
-        prev = hstart - datetime.timedelta(days = 1) # start
+        prev = date_range.start - datetime.timedelta(days = 1) # start
         for d in dates:
             if d == prev:
                 continue
             prev = d
             if d in self.history:
                 bcash = self.history[d]['balance']
-            if d.weekday() != 4:
+            if not date_range.filter(d):
                 continue
             value = bcash['cash']+sum(qty*price_history.close_for_symbol_at(sym,d) for sym,qty in bcash['portfolio'].items())
             value = value.quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
@@ -249,25 +274,18 @@ def simulate_etf_history(history, etf):
         qty += q
         yield date, qty
 
-def simulate_etf_end_of_week(history, etf, start = None):
+def simulate_etf_at_period(history, etf, date_range):
     etf_history = {i:j for i,j in simulate_etf_history(history, etf)}
-    hstart = start
-    start = min(etf_history.keys())
-    today = history.today
-    if hstart is None:
-        hstart = start + datetime.timedelta(
-            days = ((-3 - start.weekday()) if (4 - start.weekday()) > 0 else (4 - start.weekday())))
-    dates = (hstart+datetime.timedelta(days=i) for i in range(0,(today-hstart).days,7))
-    dates = sorted(chain(etf_history.keys(), dates))
+    dates = sorted(chain(etf_history.keys(), date_range.range()))
     qty = Decimal('0.00000')
-    prev = hstart - datetime.timedelta(days = 1) # start
+    prev = date_range.start - datetime.timedelta(days = 1) # start
     for d in dates:
         if d == prev:
             continue
         prev = d
         if d in etf_history:
             qty = etf_history[d]
-        if d.weekday() != 4:
+        if not date_range.filter(d):
             continue
         price = price_history.close_for_symbol_at(etf, d)
         value = (qty * price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
@@ -290,28 +308,27 @@ def plot_time_series(data, tickers, cash_history):
     colormap = {name: plt.cm.tab20.colors[e%len(plt.cm.tab20.colors)] for e, name in enumerate(["Portfolio"] + tickers)}
     dates, values = zip(*cash_history)
     ax1.step(dates, values, label = "Cash in and out", where = 'post', color = colormap["Portfolio"], linestyle = "--")
-    dates = list(data.keys())
-    pvalues = [i['Portfolio'] for i in data.values()]
-    ax1.plot(dates, pvalues, label = "Portfolio", color = colormap["Portfolio"])
+    ax1.plot(data['dates'], data['portfolio'], label = "Portfolio", color = colormap["Portfolio"])
     cash_values = []
     i = 0
-    for d in dates:
+    for d in data['dates']:
         try:
             while d >= cash_history[i+1][0]:
                 i += 1
         except IndexError:
             pass
         cash_values+=[cash_history[i][1]]
-    ax2.plot(dates,[i-j for i,j in zip(pvalues, cash_values)], label = "Portfolio", color = colormap["Portfolio"])
+    ax2.plot(data['dates'],[i-j for i,j in zip(data['portfolio'], cash_values)], label = "Portfolio", color = colormap["Portfolio"])
     for t in tickers:
-        values = [i[t] for i in data.values()]
-        ax1.plot(dates, values, label = t, color = colormap[t])
-        ax2.plot(dates, [i-j for i,j in zip(values, cash_values)], label = t, color = colormap[t])
-        values_d = [(i-j)/i*100 if i!=Decimal("0.00") else Decimal("0.00") for i,j in zip(pvalues, values)]
-        ax3.plot(dates, values_d,
+        ax1.plot(data['dates'], data[t], label = t, color = colormap[t])
+        ax2.plot(data['dates'], [i-j for i,j in zip(data[t], cash_values)], label = t, color = colormap[t])
+        values_d = [
+            (i-j)/i*100 if i!=Decimal("0.00") else Decimal("0.00") 
+            for i,j in zip(data['portfolio'], data[t])]
+        ax3.plot(data['dates'], values_d,
             label = t, color = colormap[t])
-        slope, intercept, trend_values = trendline(dates, values_d)
-        ax3.plot(dates, trend_values, label = f"{t} y = {slope:.2f}x + {intercept:.2f}", color = colormap[t], linestyle = "--")
+        slope, intercept, trend_values = trendline(data['dates'], values_d)
+        ax3.plot(data['dates'], trend_values, label = f"{t} y = {slope:.2f}x + {intercept:.2f}", color = colormap[t], linestyle = "--")
 
     ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     ax1.grid()
@@ -391,15 +408,17 @@ def history_and_stats_group(client, group_name, ids, compare):
     print(f"Annualized Time Weighted Rate of Return: {atwrr*100:.2f}%\n\n")
 
     if compare:
-        data = {d: {"Portfolio": v} for d,v in history.get_net_value_end_of_week()}
-        start = min(data.keys())
-        cash_history = [(start, Decimal("0.00"))] + cash_history + [(history.today, Decimal("0.00"))]
+        date_range = DateRange(history.get_start(), history.today, [0, 2, 4])
+        data = {
+            "dates": list(date_range.range()),
+            "portfolio": [v for _, v in history.get_net_value_at_period(date_range)]
+        }
+        cash_history = [(date_range.start, Decimal("0.00"))] + cash_history + [(history.today, Decimal("0.00"))]
         acc = Decimal("0.00")
         cash_history = [(d, acc := acc + v) for d,v in cash_history]
         for ticker in compare:
             sim_value = simulate_etf(history, ticker)
-            for d,v in simulate_etf_end_of_week(history, ticker):
-                data[d][ticker] = v
+            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range)]
             diff = final_value - sim_value
             pdiff = diff/final_value*100
             print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
@@ -441,15 +460,17 @@ def history_and_stats(client, account_name, account_id, compare):
     print("Annualized Time Weighted Rate of Return: %.2f%%\n\n"%(atwrr*100))
 
     if compare:
-        data = {d: {"Portfolio": v} for d,v in history.get_net_value_end_of_week()}
-        start = min(data.keys())
-        cash_history = [(start, Decimal("0.00"))] + cash_history + [(history.today, Decimal("0.00"))]
+        date_range = DateRange(history.get_start(), history.today, [0, 2, 4])
+        data = {
+            "dates": list(date_range.range()),
+            "portfolio": [v for _, v in history.get_net_value_at_period(date_range)]
+        }
+        cash_history = [(date_range.start, Decimal("0.00"))] + cash_history + [(history.today, Decimal("0.00"))]
         acc = Decimal("0.00")
         cash_history = [(d, acc := acc + v) for d,v in cash_history]
         for ticker in compare:
             sim_value = simulate_etf(history, ticker)
-            for d,v in simulate_etf_end_of_week(history, ticker):
-                data[d][ticker] = v
+            data[ticker] = [v for _, v in simulate_etf_at_period(history, ticker, date_range)]
             diff = final_value - sim_value
             pdiff = diff/final_value*100
             print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
