@@ -474,7 +474,7 @@ def history_and_stats(client, account_name, account_id, compare):
             diff = final_value - sim_value
             pdiff = diff/final_value*100
             print(f"Investing in {ticker} would have yield {sim_value:.2f}$. A Net difference of {diff:.2f}$ ({pdiff:.2f}%)")
-    plot_time_series(data, compare, cash_history)
+        plot_time_series(data, compare, cash_history)
 
 
 @command
