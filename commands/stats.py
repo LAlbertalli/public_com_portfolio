@@ -311,23 +311,42 @@ def simulate_etf(history, etf, delay_etf):
     net_value = (qty * final_price).quantize(Decimal('0.01'), rounding = decimal.ROUND_HALF_EVEN)
     return net_value
 
-def trendline(dates, values):
-    x = [(i - dates[0]).days/365 for i in dates]
-    slope, intercept = np.polyfit(x, [float(i) for i in values], 1)
-    trend_values = np.poly1d([slope,intercept])(x)
-    return slope, intercept, trend_values
-
 def plot_time_series(data, tickers, cash_history, delay_etf):
+    class Plotter:
+        def __init__(self, dates, tickers):
+            self.dates = dates
+            self.colormap = {
+                name: plt.cm.tab20.colors[e%len(plt.cm.tab20.colors)]
+                for e, name in enumerate(["Portfolio"] + tickers)
+            }
+
+        @staticmethod
+        def trendline(dates, values):
+            x = [(i - dates[0]).days/365 for i in dates]
+            slope, intercept = np.polyfit(x, [float(i) for i in values], 1)
+            trend_values = np.poly1d([slope,intercept])(x)
+            return slope, intercept, trend_values
+
+        def plot(self, ax, values, label, trendline = False, start_idx = 0):
+            ax.plot(
+                self.dates[start_idx:], values[start_idx:],
+                label = label, color = self.colormap[label]
+                )
+            if trendline:
+                slope, intercept, trend_values = Plotter.trendline(
+                    self.dates[start_idx:], values[start_idx:])
+                ax.plot(self.dates[start_idx:], trend_values,
+                    label = f"{label} y = {slope:.2f}x + {intercept:.2f}",
+                    color = self.colormap[label],
+                    linestyle = "--")
+
+    plot = Plotter(data['dates'], tickers)
     fig, (ax1, ax2, ax3) = plt.subplots(3,1, figsize=(12,9))
-    colormap = {name: plt.cm.tab20.colors[e%len(plt.cm.tab20.colors)] for e, name in enumerate(["Portfolio"] + tickers)}
+
     dates, values = zip(*cash_history)
-    ax1.step(dates, values, label = "Cash in and out", where = 'post', color = colormap["Portfolio"], linestyle = "--")
-    ax1.plot(data['dates'], data['portfolio'], label = "Portfolio", color = colormap["Portfolio"])
+    ax1.step(dates, values, label = "Cash in and out", where = 'post', color = plot.colormap["Portfolio"], linestyle = "--")
+    plot.plot(ax1, data['portfolio'], "Portfolio")
     cash_values = []
-    if delay_etf:
-        discard_idx = min(e for e,i in enumerate(data['dates']) if i >= delay_etf)
-    else:
-        discard_idx = 0
     i = 0
     for d in data['dates']:
         try:
@@ -336,21 +355,25 @@ def plot_time_series(data, tickers, cash_history, delay_etf):
         except IndexError:
             pass
         cash_values+=[cash_history[i][1]]
-    ax2.plot(data['dates'][discard_idx:],
-        [i-j for i,j in zip(data['portfolio'], cash_values)][discard_idx:],
-        label = "Portfolio", color = colormap["Portfolio"])
+
+    if delay_etf:
+        start_idx = min(e for e,i in enumerate(data['dates']) if i >= delay_etf)
+    else:
+        start_idx = 0
+
+    values_diff = [i-j for i,j in zip(data['portfolio'], cash_values)]
+    plot.plot(ax2, values_diff, "Portfolio", trendline = True, start_idx = start_idx)
+
     for t in tickers:
-        ax1.plot(data['dates'], data[t], label = t, color = colormap[t])
-        ax2.plot(data['dates'][discard_idx:],
-            [i-j for i,j in zip(data[t], cash_values)][discard_idx:], 
-            label = t, color = colormap[t])
+        plot.plot(ax1, data[t], t,)
+
+        values_diff = [i-j for i,j in zip(data[t], cash_values)]
+        plot.plot(ax2, values_diff, t, trendline = True, start_idx = start_idx)
+
         values_d = [
             (i-j)/i*100 if i!=Decimal("0.00") else Decimal("0.00") 
             for i,j in zip(data['portfolio'], data[t])]
-        ax3.plot(data['dates'][discard_idx:], values_d[discard_idx:],
-            label = t, color = colormap[t])
-        slope, intercept, trend_values = trendline(data['dates'][discard_idx:], values_d[discard_idx:])
-        ax3.plot(data['dates'][discard_idx:], trend_values, label = f"{t} y = {slope:.2f}x + {intercept:.2f}", color = colormap[t], linestyle = "--")
+        plot.plot(ax3, values_d, t, trendline = True, start_idx = start_idx)
 
     xlim = (
         data["dates"][0] + datetime.timedelta(days = -1),
